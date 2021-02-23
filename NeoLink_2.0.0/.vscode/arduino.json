@@ -1,0 +1,9 @@
+{
+    "board": "Heltec-esp32:esp32:wifi_lora_32_V2",
+    "configuration": "PSRAM=disabled,PartitionScheme=default,CPUFreq=240,FlashMode=qio,FlashFreq=80,FlashSize=8M,UploadSpeed=921600,DebugLevel=none",
+    "port": "COM4",
+    "sketch": "NeoLink_2.0.0.ino",
+    "programmer": "AVR ISP",
+    "output": "../output"
+    
+}

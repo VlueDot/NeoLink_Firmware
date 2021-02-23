@@ -1,0 +1,26 @@
+{
+    "configurations": [
+        {
+            "name": "Win32",
+            "includePath": [
+                "C:\\Users\\vince\\AppData\\Local\\Arduino15\\packages\\Heltec-esp32\\tools\\**",
+                "C:\\Users\\vince\\AppData\\Local\\Arduino15\\packages\\Heltec-esp32\\hardware\\esp32\\0.0.4\\**",
+                
+
+                "${workspaceFolder}/**",
+               
+                "C:\\Program Files (x86)\\Arduino\\Greenbird libraries\\**" ,
+                "C:\\Program Files (x86)\\Arduino\\libraries\\**"
+            ],
+            "defines": [
+                "_DEBUG",
+                "UNICODE",
+                "_UNICODE",
+                "USBCON"
+            ],
+            "intelliSenseMode": "msvc-x64",
+            "forcedInclude": []
+        }
+    ],
+    "version": 4
+}
