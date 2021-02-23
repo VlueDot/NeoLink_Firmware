@@ -3,10 +3,8 @@
         {
             "name": "Win32",
             "includePath": [
-                
-                               
-            "../../Greenbird libraries/own-libs"
-              
+                "../../Own_libs"
+         
             ],
             "defines": [
                 "_DEBUG",
