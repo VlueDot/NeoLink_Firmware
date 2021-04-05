@@ -28,6 +28,7 @@ const int   DEV_DEBUG = 1;
 #include <WiFi.h>
 #include "FirebaseESP32.h"
 #include "FirebaseJson.h"
+#include "neoFirebaseJson.h"
 #include <Arduino_JSON.h>
 #include <HTTPClient.h>
 //------------------------ TIME NTP SERVER ----------------------------
@@ -37,6 +38,7 @@ const int   DEV_DEBUG = 1;
 //-----------------------------------OWN---------------------------------
 #include <beep.h>
 #include <EEPROM.h>
+
 
 //json firmware version
 
@@ -1805,16 +1807,16 @@ void send_cloud() {
 
 
 
-  FirebaseJson json_port1;
-  FirebaseJson json_port2;
-  FirebaseJson json_port3;
-  FirebaseJson json_port4;
-  FirebaseJson json_port_status;
+  neoFirebaseJson json_port1;
+  neoFirebaseJson json_port2;
+  neoFirebaseJson json_port3;
+  neoFirebaseJson json_port4;
+  neoFirebaseJson json_port_status;
 
   //---------------------------------------------------PORT 1--------------------------------------------------------------
   if (Port1_Active) {
 
-    json_port_status.set( "Port1_Active" , port1_type);
+    json_port_status.FirebaseJson::set( "Port1_Active" , port1_type);
 
     for (int i = 0; i < port1_nvar; i++) {
       json_port1.set( "/P1/V" + String(i + 1), double(port1_variables[i]), 2);
@@ -1838,14 +1840,14 @@ void send_cloud() {
       Serial.println(buff_string2); */
 
   }
-  else  json_port_status.set( "Port1_Active", "NaN");
+  else  json_port_status.FirebaseJson::set( "Port1_Active", "NaN");
 
 
 
   //-------------------------------------------------PORT 2----------------------------------------------------------------
   if (Port2_Active) {
 
-    json_port_status.set("Port2_Active" , port2_type);
+    json_port_status.FirebaseJson::set("Port2_Active" , port2_type);
 
     for (int i = 0; i < port2_nvar; i++) {
       json_port2.set( "/P2/V" + String(i + 1), double(port2_variables[i]), 2);
@@ -1856,7 +1858,7 @@ void send_cloud() {
     if (port2_type == "g") {
       json_port2.set( "/P2/VWC", double(P2_humidity_m3m3), 3);
       json_port2.set( "/P2/ApPer", double(P2_aparent_perm), 3);
-      json_port2.set( "/P2/PorePer", double(P2_pore_perm)), 3;
+      json_port2.set( "/P2/PorePer", double(P2_pore_perm), 3);
       json_port2.set( "/P2/PoreCE", double(P2_water_pore_cond), 3);
 
       /* String buff_string;
@@ -1866,12 +1868,12 @@ void send_cloud() {
     }
 
   }
-  else  json_port_status.set( "Port2_Active", "NaN");
+  else  json_port_status.FirebaseJson::set( "Port2_Active", "NaN");
 
   //-------------------------------------------------PORT 3----------------------------------------------------------------
   if (Port3_Active) {
 
-    json_port_status.set(  "Port3_Active" , port3_type);
+    json_port_status.FirebaseJson::set(  "Port3_Active" , port3_type);
 
     for (int i = 0; i < port3_nvar; i++) {
       json_port3.set(  "/P3/V" + String(i + 1), double(port3_variables[i]), 2);
@@ -1888,12 +1890,12 @@ void send_cloud() {
     }
 
   }
-  else  json_port_status.set( "Port3_Active", "NaN");
+  else  json_port_status.FirebaseJson::set( "Port3_Active", "NaN");
 
   //-----------------------------------------------PORT 4------------------------------------------------------------------
   if (Port4_Active) {
 
-    json_port_status.set("Port4_Active" , port4_type);
+    json_port_status.FirebaseJson::set("Port4_Active" , port4_type);
 
     for (int i = 0; i < port4_nvar; i++) {
       json_port4.set("/P4/V" + String(i + 1), double(port4_variables[i]), 2);
@@ -1912,7 +1914,7 @@ void send_cloud() {
     }
 
   }
-  else  json_port_status.set("Port4_Active", "NaN");
+  else  json_port_status.FirebaseJson::set("Port4_Active", "NaN");
 
   //----------------------------------------------------END PORT------------------------------------------------------------
 
@@ -1924,7 +1926,7 @@ void send_cloud() {
   
 
   //Json State
-  FirebaseJson json_state;
+  neoFirebaseJson json_state;
   
 
   //sending weather values
@@ -1932,13 +1934,13 @@ void send_cloud() {
     json_state.set("dT", double(dry_bulb_temp_mov), 2);
     json_state.set("BP", double(barometric_pressure), 2);
     json_state.set("RH", double(relative_humidity), 2);
-    json_state.set("AL", int(pressure_altitude));
+    json_state.FirebaseJson::set("AL", int(pressure_altitude));
     json_state.set("BV", double(battery_voltage), 3);
     json_state.set("SV", double(solar_voltage), 2);
     json_state.set("iT", double(internal_temperature_voltage), 1);
     json_state.set("WS", double(wind_speed), 2);
-    json_state.set("WD", int(wind_deg));
-    json_state.set("OP_TIME", int(millis() / 1000));
+    json_state.FirebaseJson::set("WD", int(wind_deg));
+    json_state.FirebaseJson::set("OP_TIME", int(millis() / 1000));
 
   }
   /*
@@ -1954,7 +1956,7 @@ void send_cloud() {
   //sending gps values
   //Serial.println("GPS_CLOUD" + String(GPS_CLOUD));
   //Serial.println(LATITUDE);
-  FirebaseJson json_gps;
+  neoFirebaseJson json_gps;
   if (GPS_CLOUD && LATITUDE != -8.079025 && LONGITUDE != -79.122865 ) {
     json_gps.set("LAT", LATITUDE, 5);
     json_gps.set("LONG", LONGITUDE, 5);
@@ -2184,10 +2186,10 @@ if ( Port4_Active )  p4_err_c = 0;
   json_observer.toString(buff_string_obserever,true);
   Serial.println(buff_string_obserever); 
 
-  if (Port1_Active) json_port1.set("/P1/Depth", DEPTH1);
-  if (Port2_Active) json_port2.set("/P2/Depth", DEPTH2);
-  if (Port3_Active) json_port3.set("/P3/Depth", DEPTH3);
-  if (Port4_Active) json_port4.set("/P4/Depth", DEPTH4);
+  if (Port1_Active) json_port1.FirebaseJson::set("/P1/Depth", DEPTH1);
+  if (Port2_Active) json_port2.FirebaseJson::set("/P2/Depth", DEPTH2);
+  if (Port3_Active) json_port3.FirebaseJson::set("/P3/Depth", DEPTH3);
+  if (Port4_Active) json_port4.FirebaseJson::set("/P4/Depth", DEPTH4);
 
   String timestamp_string = "/" + _year + "/" + _month + "/" + _day + "/" + _hour + "/" + _min;
   Serial.println("Firebase timestamp: " + timestamp_string);
