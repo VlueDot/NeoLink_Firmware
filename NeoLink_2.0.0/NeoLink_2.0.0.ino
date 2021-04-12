@@ -4,6 +4,7 @@ const int   DEV_DEBUG = 1;
 
 
 
+
 //------------- OTA ------------------------------------------------
 //#include <WebServer.h>
 //#include <ESPmDNS.h>
@@ -40,12 +41,31 @@ const int   DEV_DEBUG = 1;
 #include <EEPROM.h>
 
 
-//json firmware version
-
 //_____________________________________________________________________//
 //                                                                      //
-//                  DESARROLLO                                         //                                                                      //
+//                  NEOLINK                                       //                                                                      //
 //______________________________________________________________________//
+
+#define FIRMWARE_MODE 'DEV'
+
+#if FIRMWARE_MODE == 'PRO'
+  #define FIREBASE_HOST "https://neolink-934b4.firebaseio.com"
+  #define FIREBASE_AUTH "IroB3fdbcPb9vxPlJKDJcqmfJgs0KouJGe0sUBKN"
+  #define UPDATE_JSON_URL  "https://firmware-neolink.s3-sa-east-1.amazonaws.com/firmware_pro.json"
+  const String WIFI_SSID_DEFAULT = "NeoLink_wlan"; //modem default
+  const String WIFI_PSSWD_DEFAULT = "123456789a";
+
+#elif FIRMWARE_MODE == 'DEV'
+  #define FIREBASE_HOST "https://neolink-b2f81-default-rtdb.firebaseio.com"
+  #define FIREBASE_AUTH "P2aDr6F6P1XZQ3zc7k4ABuPBT9o5szLwFHphsqZt"
+  #define UPDATE_JSON_URL  "https://test-firmware-neolink.s3.us-east-2.amazonaws.com/firmware_dev.json"
+  const String WIFI_SSID_DEFAULT = "LINUX";
+  const String WIFI_PSSWD_DEFAULT = "123456789a";
+
+#endif
+
+
+
 
 
 
@@ -64,18 +84,6 @@ String SN_WE;
 
 
 
-
-
-
-//------------  WIFI DEFAULT  --------------------------------------
-//const String WIFI_SSID_DEFAULT = "NeoLink_wlan"; //modem default
-const String WIFI_SSID_DEFAULT = "LINUX";
-
-//const String WIFI_SSID_DEFAULT = "NeoLink_wlan"; //modem default"; //modem default
-
-//const String WIFI_PSSWD_DEFAULT = "123456789a";
-//const String WIFI_SSID_DEFAULT = "NeoLinkWiFi";
-const String WIFI_PSSWD_DEFAULT = "123456789a";
 
 //------------- GPS ------------------------------------------------
 
@@ -148,22 +156,13 @@ SoftwareSerial ArdSerial(esp32_RX___ard_TX, esp32_TX___ard_RX);
 
 //-----------------------------Firebase & Servers-------------------------------------
 
-#define FIREBASE_HOST "https://neolink-934b4.firebaseio.com"
-#define FIREBASE_AUTH "IroB3fdbcPb9vxPlJKDJcqmfJgs0KouJGe0sUBKN"
+
 
 const String openWeatherMapApiKey = "4720c89eaac409313d52d4434ed2844d";
 String jsonWeatherBuffer;
 const String WEATHER_SERVER_PATH_1 = "http://api.openweathermap.org/data/2.5/onecall?";
-//String 3 = lat=-8.121164&lon=-79.035155
 const String WEATHER_SERVER_PATH_2 = "&exclude=hourly,daily&appid=4720c89eaac409313d52d4434ed2844d";
 
-
-//------------------------- OTA HTTPS --------------------------------
-
-//desarrollo
-//#define UPDATE_JSON_URL  "https://test-firmware-neolink.s3.us-east-2.amazonaws.com/firmware_dev.json"
-//produccion
-#define UPDATE_JSON_URL  "https://firmware-neolink.s3-sa-east-1.amazonaws.com/firmware_pro.json"
 
 
 
@@ -424,8 +423,6 @@ void setup() {
   chipid_str = String((uint16_t)(chipid >> 32), HEX) + String((uint32_t)chipid, HEX);
   
 
- 
- 
   
   
   
