@@ -1,6 +1,6 @@
 // Compatiblee con Peripheral v1.0
 
-const int   DEV_DEBUG = 1;
+
 
 
 
@@ -46,6 +46,13 @@ const int   DEV_DEBUG = 1;
 //                  NEOLINK                                       //                                                                      //
 //______________________________________________________________________//
 
+const String DEVICE_TYPE = "NeoLink";
+const String DEVICE_HEADER = "NL";
+String SN = "XX0000-0000";
+const String FIRMWARE_VER = "2.0.0";
+//const double BUILT = 552;
+const char* HARDWARE_VER = "2";
+
 #define FIRMWARE_MODE 'DEV'
 
 #if FIRMWARE_MODE == 'PRO'
@@ -59,33 +66,10 @@ const int   DEV_DEBUG = 1;
   #define FIREBASE_HOST "https://neolink-b2f81-default-rtdb.firebaseio.com"
   #define FIREBASE_AUTH "P2aDr6F6P1XZQ3zc7k4ABuPBT9o5szLwFHphsqZt"
   #define UPDATE_JSON_URL  "https://test-firmware-neolink.s3.us-east-2.amazonaws.com/firmware_dev.json"
-  const String WIFI_SSID_DEFAULT = "LINUX";
-  const String WIFI_PSSWD_DEFAULT = "123456789a";
+  const String WIFI_SSID_DEFAULT = "LINUX1";
+  const String WIFI_PSSWD_DEFAULT = "123456789abc";
 
 #endif
-
-
-
-
-
-
-const String FIRMWARE_VER = "1.0.7";
-//const double BUILT = 552;
-const char* HARDWARE_VER = "2";
-
-
-//------------------------------------------------------------------
-const String DEVICE_TYPE = "NeoLink";
-const String DEVICE_HEADER = "NL";
-//const String SN = "NL2011-0001";
-String SN = "XX0000-0000";
-String SN_WE;
-
-
-
-
-
-//------------- GPS ------------------------------------------------
 
 
 
@@ -417,7 +401,7 @@ void setup() {
     sn_temporal[i]=(char)EEPROM.read(i);
   }
 
-  SN_WE= sn_temporal + '\0';
+  //SN_WE= sn_temporal + '\0';
   SN = sn_temporal;
   chipid = ESP.getEfuseMac(); //The chip ID is essentially its MAC address(length: 6 bytes).
   chipid_str = String((uint16_t)(chipid >> 32), HEX) + String((uint32_t)chipid, HEX);
@@ -470,8 +454,13 @@ void setup() {
       Serial.println("SN FOUND: " + SN+"");
     }
 
+    
+
     if (SN[0] == DEVICE_HEADER[0] && SN[1] == DEVICE_HEADER[1] ) INCOMPATIBILIDAD_FIRMWARE_ERROR =0;
     else INCOMPATIBILIDAD_FIRMWARE_ERROR = 1;
+
+    DEVICE = "/" + DEVICE_TYPE + "/" + SN ;
+    
 
     Serial.println("NeoLink version=" + FIRMWARE_VER);
 
@@ -484,8 +473,7 @@ void setup() {
       deepsleep(POWERLESS_TIME);
     }
 
-    DEVICE = "/" + DEVICE_TYPE + "/" + SN ;
-    Serial.println(DEVICE);
+    
     if (INCOMPATIBILIDAD_FIRMWARE_ERROR) compatibility_error();
 
     if (is_registered) {
@@ -535,22 +523,23 @@ int checking_battery() {
   solar_voltage_temp  = ReadVoltage(SOLAR_VALUE) ;
   
   battery_voltage_temp = ReadVoltage(BAT_VALUE) ;
-  if (DEV_DEBUG) battery_voltage_temp = 2000;
+  //battery_voltage_temp = 2000;
 
   digitalWrite(BAT_SOLAR_EN, LOW);
   if (battery_voltage <= 0 ) {
-    battery_voltage = battery_voltage_temp * 0.00175 ;
+    battery_voltage = battery_voltage_temp * 0.00182189 ;
   }
   if ( solar_voltage <= 0) {
-    solar_voltage = solar_voltage_temp * 0.002;
+    solar_voltage = solar_voltage_temp * 0.003692945;
   }
   //Serial.print ("past solar_voltage: ");
   //Serial.println (solar_voltage);
   //Serial.print ("past battery_voltage: ");
   //Serial.println (battery_voltage);
 
-  solar_voltage = (solar_voltage_temp*0.002  + solar_voltage) / 2 ;
-  battery_voltage = (battery_voltage_temp * 0.00175 + battery_voltage ) / 2 ;
+  solar_voltage = solar_voltage_temp*0.003692946  ;
+  //solar_voltage = (solar_voltage_temp*0.002371486  + solar_voltage) / 2 ;
+  battery_voltage = (battery_voltage_temp * 0.00182189 + battery_voltage ) / 2 ;
 
   Serial.print (" solar_voltage: ");
   Serial.println (solar_voltage);
@@ -704,6 +693,10 @@ void check_registered() {
     if (i_hour > N_END_HOUR && i_hour < N_START_HOUR) sleepy_time = SLEEP_TIME;
     else sleepy_time = N_SLEEP_TIME;
     int factor_temp = sleepy_time / 60;
+    
+    Serial.print("sleepy ");
+    Serial.println(sleepy_time);
+
     i_min = (i_min / factor_temp) * factor_temp;
 
     String real_month;
@@ -725,7 +718,7 @@ void check_registered() {
 
     //creo cadena
 
-    String auxiliar_string = _year + "/" + real_month + "/" + real_day + "/" + real_hour + "/" + real_min ;
+    String auxiliar_string = _year + "/" + real_month + "/" + real_day + " " + real_hour + ":" + real_min ;
     //Serial.println(auxiliar_string);
     Serial.print("Verifying last record @ " + auxiliar_string);
     //verifico si existe y doy pase
@@ -2171,7 +2164,7 @@ if ( Port4_Active )  p4_err_c = 0;
   String _secs;
   if (i_secs < 10) _secs = "0" + String(i_secs);
   else _secs = String(i_secs);
-
+/*
   FirebaseJson json_observer;
 
   json_observer.set("/P1_msg", port1_msg);
@@ -2182,6 +2175,8 @@ if ( Port4_Active )  p4_err_c = 0;
   String buff_string_obserever;
   json_observer.toString(buff_string_obserever,true);
   Serial.println(buff_string_obserever); 
+
+  */
 
   if (Port1_Active) json_port1.FirebaseJson::set("/P1/Depth", DEPTH1);
   if (Port2_Active) json_port2.FirebaseJson::set("/P2/Depth", DEPTH2);
@@ -2231,7 +2226,7 @@ if ( Port4_Active )  p4_err_c = 0;
 
   delay(150);
 
-  Firebase.updateNodeSilent(firebasedata, DEVICE + "/Observer" + timestamp_string, json_observer);
+  //Firebase.updateNodeSilent(firebasedata, DEVICE + "/Observer" + timestamp_string, json_observer);
 
   
 
@@ -2899,6 +2894,13 @@ int FirmwareCheck() {
         Serial.println("[HTTP] JSON OK");
 
         cJSON *device = cJSON_GetObjectItemCaseSensitive(json, HARDWARE_VER);
+
+        if (device == NULL) {
+          printf("There is no any FW for this HW version. Aborting...\n");
+          http.end();
+          return 1; //should be 0?
+          }
+
         cJSON *firmware_version = cJSON_GetObjectItemCaseSensitive(device, "firmware_ver");
         cJSON *built = cJSON_GetObjectItemCaseSensitive(device, "built");
         cJSON *chk = cJSON_GetObjectItemCaseSensitive(device, "chk");
