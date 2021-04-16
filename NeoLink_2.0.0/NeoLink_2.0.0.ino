@@ -40,6 +40,12 @@
 #include <beep.h>
 #include <EEPROM.h>
 
+//--------- INTERNAL TEMP ----------------
+#include <OneWire.h>
+#include <DallasTemperature.h>
+
+
+
 
 //_____________________________________________________________________//
 //                                                                      //
@@ -125,7 +131,7 @@ const byte esp32_TX___ard_RX = 17;
 #define RTC_IO 33
 #define TOUCH_T9 32
 #define AUX_IN 39
-#define TEMP_VALUE 38
+#define TEMP_VALUE 33
 #define SOLAR_VALUE 37
 #define BAT_VALUE 36
 
@@ -169,7 +175,17 @@ const int   daylightOffset_sec = 0;
 
 Beep beep(BEEP);
 
+//------------------------------- INTERNAL ----------------------------------------
+
+OneWire oneWire(TEMP_VALUE);
+
+DallasTemperature sensors(&oneWire);
+
+
 //------------------------------- Heltec ----------------------------------------
+
+
+
 
 #define BAND    433E6
 
@@ -332,7 +348,8 @@ String port4_msg;
 RTC_DATA_ATTR float dry_bulb_temp_mov = 200;
 RTC_DATA_ATTR float battery_voltage = -10;
 RTC_DATA_ATTR float solar_voltage = -10;
-RTC_DATA_ATTR float internal_temperature_voltage = 0;
+RTC_DATA_ATTR float internal_temperature= 0;
+float internal_temperature_raw =0 ;
 
 RTC_DATA_ATTR float SLEEP_TIME = 900;
 RTC_DATA_ATTR float N_SLEEP_TIME = 1200;
@@ -414,14 +431,13 @@ void setup() {
   if (prg_iteration == 0) {
     Serial.println("\n----------------------------------");
     Serial.println("[STEP 1]: ");
-  	
     if (!checking_battery()) 
      {
       Serial.println(" Not enought energy. Shutting down until battery_hysteresis ");
       deepsleep(POWERLESS_TIME);
 
     }
-
+    
     check_first_WiFi();
 
 
@@ -694,8 +710,6 @@ void check_registered() {
     else sleepy_time = N_SLEEP_TIME;
     int factor_temp = sleepy_time / 60;
     
-    Serial.print("sleepy ");
-    Serial.println(sleepy_time);
 
     i_min = (i_min / factor_temp) * factor_temp;
 
@@ -1748,6 +1762,8 @@ void get_environment_sensor() {
 
 //------------------------------------------------------------------
 
+
+
 void get_neolink_status() {
 
   //SOLAR
@@ -1762,14 +1778,20 @@ void get_neolink_status() {
 
   //Internal TEMP
   digitalWrite(TEMP_EN, HIGH);
-  delay(50);
-  pinMode(TEMP_VALUE, INPUT_PULLDOWN);
-  Serial.print("Internal temperature = ");
-  float TEMP_VALUE_TEMP = ReadVoltage(TEMP_VALUE) * 0.18029 ;
+  delay(100);
 
-  if (internal_temperature_voltage == 0) internal_temperature_voltage = TEMP_VALUE_TEMP ;
-  internal_temperature_voltage = (TEMP_VALUE_TEMP  + internal_temperature_voltage) / 2;
-  Serial.println(internal_temperature_voltage);
+  sensors.begin();
+  sensors.requestTemperatures(); 
+  internal_temperature_raw=sensors.getTempCByIndex(0);
+  Serial.print("Internal Temperature RAW = ");
+  Serial.println(internal_temperature_raw);
+
+ 
+
+  if (internal_temperature == 0) internal_temperature = internal_temperature_raw ;
+  internal_temperature = (internal_temperature_raw  + internal_temperature) / 2;
+  Serial.print("Internal Temperature Mean = ");
+  Serial.println(internal_temperature);
 
   digitalWrite(TEMP_EN, LOW);
 
@@ -1909,9 +1931,9 @@ void send_cloud() {
   //----------------------------------------------------END PORT------------------------------------------------------------
 
   float temp_factor = 0.11;
-  if (internal_temperature_voltage <= 21.5) temp_factor = 0;
+  if (internal_temperature <= 21.5) temp_factor = 0;
   //dry_bulb_temp_mov=dry_bulb_temp_mov- temp_factor*(internal_temperature_voltage - dry_bulb_temp_mov);
-  dry_bulb_temp_mov = dry_bulb_temp_mov - temp_factor * (internal_temperature_voltage - dry_bulb_temp_mov);
+  dry_bulb_temp_mov = dry_bulb_temp_mov - temp_factor * (internal_temperature - dry_bulb_temp_mov);
 
   
 
@@ -1927,7 +1949,8 @@ void send_cloud() {
     json_state.FirebaseJson::set("AL", int(pressure_altitude));
     json_state.set("BV", double(battery_voltage), 3);
     json_state.set("SV", double(solar_voltage), 2);
-    json_state.set("iT", double(internal_temperature_voltage), 1);
+    json_state.set("iT", double(internal_temperature), 1);
+    json_state.set("iTr", double(internal_temperature_raw), 1);
     json_state.set("WS", double(wind_speed), 2);
     json_state.FirebaseJson::set("WD", int(wind_deg));
     json_state.FirebaseJson::set("OP_TIME", int(millis() / 1000));
@@ -1936,7 +1959,7 @@ void send_cloud() {
   /*
     json_state.set("BV", double(battery_voltage), 3);
     json_state.set("SV", double(solar_voltage), 2);
-    json_state.set("iT", double(internal_temperature_voltage), 1);
+    json_state.set("iT", double(internal_temperature), 1);
     json_state.set("WS", double(wind_speed), 2);
     json_state.set("WD", int(wind_deg));
     json_state.set("OP_TIME", int(millis() / 1000));
@@ -2183,7 +2206,7 @@ if ( Port4_Active )  p4_err_c = 0;
   if (Port3_Active) json_port3.FirebaseJson::set("/P3/Depth", DEPTH3);
   if (Port4_Active) json_port4.FirebaseJson::set("/P4/Depth", DEPTH4);
 
-  String timestamp_string = "/" + _year + "/" + _month + "/" + _day + "/" + _hour + "/" + _min;
+  String timestamp_string = _year + "/" + _month + "/" + _day + " " + _hour + ":" + _min;
   Serial.println("Firebase timestamp: " + timestamp_string);
 
 
