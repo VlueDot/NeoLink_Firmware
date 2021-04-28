@@ -117,6 +117,7 @@ char rcv_buffer[200];
 
 #define SEALEVELPRESSURE_HPA 1015.85
 Adafruit_BME280 bme_static;
+Adafruit_BME280 bme_aux;
 
 
 
@@ -217,9 +218,11 @@ int8_t actual_secs;
 //enviroment
 //raw
 float dry_bulb_temp = 0;
+float dry_bulb_temp_aux = 0;
 
 float barometric_pressure = 0;
 float relative_humidity = 0;
+float relative_humidity_aux = 0;
 float pressure_altitude = 0;
 RTC_DATA_ATTR double relative_humidity_past = 0;
 
@@ -732,11 +735,12 @@ void check_registered() {
 
     //creo cadena
 
-    String auxiliar_string = _year + "/" + real_month + "/" + real_day + " " + real_hour + ":" + real_min ;
+    String auxiliar_string_2 = _year + "/" + real_month + "/" + real_day + " " + real_hour + ":" + real_min ;
     //Serial.println(auxiliar_string);
-    Serial.print("Verifying last record @ " + auxiliar_string);
+    Serial.print("Verifying last record @ " + auxiliar_string_2);
     //verifico si existe y doy pase
-    
+    String auxiliar_string = _year + "/" + real_month + "/" + real_day + "/" + real_hour + "/" + real_min ;
+
     boolean cond1 = Firebase.getFloat(firebasedata, DEVICE + PATH_DATA  + "/State/" + auxiliar_string + "/RH" );
     //verify correct sensor measure
     boolean cond2 = 1;
@@ -775,9 +779,9 @@ void check_registered() {
       else real_sec = String(actual_secs);
 
 
-      String auxiliar_string = _year + "." + real_month + "." + real_day + "." + real_hour + "." + real_min + "." + real_sec;
+      auxiliar_string_2 = _year + "/" + real_month + "/" + real_day + " " + real_hour + ":" + real_min + ":" + real_sec;
 
-      Firebase.setString(firebasedata, DEVICE + PATH_CONFIGURATION_STATUS + "LastRestart", auxiliar_string);
+      Firebase.setString(firebasedata, DEVICE + PATH_CONFIGURATION_STATUS + "LastRestart", auxiliar_string_2);
 
       delay(100);
 
@@ -1679,6 +1683,7 @@ void get_environment_sensor() {
   read_OpenWeather();
 
   int8_t status_atm = 0;
+  int8_t status_atm_aux = 0;
   int8_t rep_atm = 0;
 
 
@@ -1687,13 +1692,35 @@ void get_environment_sensor() {
     digitalWrite(ATMOS_EN, HIGH );
     //aux
     delay(750);
+    
+
 
     status_atm = bme_static.begin(0x76);
+    
 
-    delay(750);
+    status_atm_aux = bme_aux.begin(0x77);
+
+    if(!status_atm_aux) {
+      
+      Serial.println("Could not find a valid [AUX] BME280 sensor, check wiring, address, sensor ID!");
+      Serial.print("SensorID [AUX] was: 0x");
+      Serial.println(bme_aux.sensorID(), HEX);}
+
+    else {
+      
+      Serial.print("[AUX] Temp: ");
+      dry_bulb_temp_aux = bme_aux.readTemperature();
+      Serial.println(dry_bulb_temp_aux);
+      Serial.print("[AUX] Hum: ");
+      relative_humidity_aux = bme_aux.readHumidity();
+      Serial.println(relative_humidity_aux);
+    }
+    
+
+
     if (!status_atm) {
-      Serial.println("Could not find a valid BME280 sensor, check wiring, address, sensor ID!");
-      Serial.print("SensorID was: 0x");
+      Serial.println("Could not find a valid [ATM] BME280 sensor, check wiring, address, sensor ID!");
+      Serial.print("SensorID [ATM] was: 0x");
       Serial.println(bme_static.sensorID(), HEX);
       digitalWrite(ATMOS_EN, LOW);
       rep_atm = rep_atm + 1;
@@ -1724,17 +1751,21 @@ void get_environment_sensor() {
       relative_humidity = bme_static.readHumidity();
       pressure_altitude = bme_static.readAltitude(SEALEVELPRESSURE_HPA);
       if (pressure_altitude < 0) pressure_altitude = 0;
-      //Serial.println("dry_bulb_temp: " + String(dry_bulb_temp,2));
-      Serial.println("dry_bulb_temp MA 2: " + String(dry_bulb_temp_mov, 2));
-      Serial.println("barometric_pressure: " + String(barometric_pressure));
-      Serial.println("relative_humidity: " + String(relative_humidity));
-      Serial.println("pressure_altitude: " + String(pressure_altitude));
+      
+      Serial.println("[ATM] dry_bulb_temp: " + String(dry_bulb_temp,2));
+      Serial.println("[ATM] barometric_pressure: " + String(barometric_pressure,2));
+      Serial.println("[ATM] relative_humidity: " + String(relative_humidity,2));
+      Serial.println("[ATM] pressure_altitude: " + String(pressure_altitude));
+      Serial.println("[ATM] dry_bulb_temp M.A.2: " + String(dry_bulb_temp_mov, 2));
+
       if (dry_bulb_temp > 0 && relative_humidity > 0 && barometric_pressure < 104) {
-        if (relative_humidity == 100 && relative_humidity_past != 0 && (relative_humidity - relative_humidity_past > 20) ) {
-          Serial.println("RH was 100. Skip.");
+        if (relative_humidity == 100 && relative_humidity_past != 0 && (relative_humidity - relative_humidity_past > 25) ) {
+          Serial.println("RH satured. Skip.");
           rep_atm = rep_atm + 1;
           no_atmos = 1;
-          if (rep_atm > 15) break;
+          if (rep_atm > 15) {
+            digitalWrite(ATMOS_EN, LOW);
+            break;}
         }
         else {
           Serial.print("| Past RH: ");
@@ -1944,13 +1975,16 @@ void send_cloud() {
   //sending weather values
   if (!no_atmos) {
     json_state.set("dT", double(dry_bulb_temp_mov), 2);
+    json_state.set("dT_raw", double(dry_bulb_temp), 2);
     json_state.set("BP", double(barometric_pressure), 2);
     json_state.set("RH", double(relative_humidity), 2);
+    json_state.set("RH_aux", double(relative_humidity_aux), 1);
     json_state.FirebaseJson::set("AL", int(pressure_altitude));
     json_state.set("BV", double(battery_voltage), 3);
     json_state.set("SV", double(solar_voltage), 2);
     json_state.set("iT", double(internal_temperature), 1);
-    json_state.set("iTr", double(internal_temperature_raw), 1);
+    json_state.set("iT_raw", double(internal_temperature_raw), 1);
+    json_state.set("iT_aux", double(dry_bulb_temp_aux), 1);
     json_state.set("WS", double(wind_speed), 2);
     json_state.FirebaseJson::set("WD", int(wind_deg));
     json_state.FirebaseJson::set("OP_TIME", int(millis() / 1000));
@@ -2037,7 +2071,7 @@ void send_cloud() {
 
 
 
-  String auxiliar_string = _year + "." + real_month + "." + real_day + "." + real_hour + "." + real_min + "." + real_secs;
+  String auxiliar_string = _year + "/" + real_month + "/" + real_day + " " + real_hour + ":" + real_min + ":" + real_secs;
 
   String _hour;
 
@@ -2206,9 +2240,9 @@ if ( Port4_Active )  p4_err_c = 0;
   if (Port3_Active) json_port3.FirebaseJson::set("/P3/Depth", DEPTH3);
   if (Port4_Active) json_port4.FirebaseJson::set("/P4/Depth", DEPTH4);
 
-  String timestamp_string = _year + "/" + _month + "/" + _day + " " + _hour + ":" + _min;
-  Serial.println("Firebase timestamp: " + timestamp_string);
-
+  String timestamp_string2 = _year + "/" + _month + "/" + _day + " " + _hour + ":" + _min;
+  Serial.println("Firebase timestamp: " + timestamp_string2);
+  String timestamp_string = "/" + _year + "/" + _month + "/" + _day + "/" + _hour + "/" + _min;
 
 
   //sending Firebase
@@ -2254,7 +2288,7 @@ if ( Port4_Active )  p4_err_c = 0;
   
 
 
-  Firebase.setString(firebasedata, DEVICE + PATH_CONFIGURATION_STATUS + "FireTimeStamp", timestamp_string );
+  Firebase.setString(firebasedata, DEVICE + PATH_CONFIGURATION_STATUS + "FireTimeStamp", timestamp_string2 );
   
 
   if (Start_or_Restart) {
