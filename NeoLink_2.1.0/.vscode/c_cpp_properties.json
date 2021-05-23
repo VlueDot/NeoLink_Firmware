@@ -4,7 +4,9 @@
             "name": "Win32",
             "includePath": [
                 "C:/Users/vince/Documents/Arduino/libraries/**",
-                "C:/Users/Ernesto Bazàn/Documents/Arduino/libraries/**"      
+                "C:/Users/Ernesto Bazàn/Documents/Arduino/libraries/**",
+                "D:/Arduino/libraries/**"
+                       
             ],
             "defines": [
                 "_DEBUG",

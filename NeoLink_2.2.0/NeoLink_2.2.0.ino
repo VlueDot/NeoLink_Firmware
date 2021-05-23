@@ -58,9 +58,9 @@ const String DEVICE_HEADER = "NL";
 String SN = "XX0000-0000";
 const String FIRMWARE_VER = "2.0.0";
 //const double BUILT = 552;
-const char* HARDWARE_VER = "2";
+const char* HARDWARE_VER = "2.0";
 
-#define FIRMWARE_MODE 'DEV2'
+#define FIRMWARE_MODE 'DEV2.2'
 
 #if FIRMWARE_MODE == 'PRO'
   #define FIREBASE_HOST "https://neolink-934b4.firebaseio.com"
@@ -76,15 +76,25 @@ const char* HARDWARE_VER = "2";
   const String WIFI_SSID_DEFAULT = "LINUX1";
   const String WIFI_PSSWD_DEFAULT = "123456789abc";  
 
-#elif FIRMWARE_MODE == 'DEV2'
+#elif FIRMWARE_MODE == 'DEV2.2'
   #define FIREBASE_HOST "https://neolink-934b4.firebaseio.com"
   #define FIREBASE_AUTH "IroB3fdbcPb9vxPlJKDJcqmfJgs0KouJGe0sUBKN"
   #define UPDATE_JSON_URL  "https://firmware-neolink.s3-sa-east-1.amazonaws.com/firmware_pro.json"
   const String WIFI_SSID_DEFAULT = "LINUX1";
   const String WIFI_PSSWD_DEFAULT = "123456789abc";
-  // constantes de adress y destino para desarrollo conexion lora 1er neonode
-  byte localAddress = 0xBB;
-  byte destination = 0x01;
+  byte localAddress = 0xBB; //address of this device.
+  byte destination = 0x01; //destination to send to.
+
+
+#elif FIRMWARE_MODE == 'DEV2.1'
+  #define FIREBASE_HOST "https://neolink-934b4.firebaseio.com"
+  #define FIREBASE_AUTH "IroB3fdbcPb9vxPlJKDJcqmfJgs0KouJGe0sUBKN"
+  #define UPDATE_JSON_URL  "https://firmware-neolink.s3-sa-east-1.amazonaws.com/firmware_pro.json"
+  const String WIFI_SSID_DEFAULT = "LINUX1";
+  const String WIFI_PSSWD_DEFAULT = "123456789abc";
+  byte localAddress = 0xBB; //address of this device.
+  byte destination = 0x01; //destination to send to.
+
 #endif
 
 
@@ -394,13 +404,73 @@ RTC_DATA_ATTR float MA_port4_G_3[3] = {0,0,0};
 //Lora communication variables 
 String incoming;               // incoming message
 String outgoing; //outgoing message
+byte msgCount=0;        // count of outgoing messages
+long lastSendTime=0;    // last send time
+int interval = 2000;    // interval between sends
+
+//------------------  -----------------------------------  -----------------------------------  -----------------------------------  -----------------
+//------------------  -----------------------------------  -----------------------------------  -----------------------------------  -----------------
+//------------------  -----------------------------------  -----------------------------------  -----------------------------------  -----------------
+//------------------  -----------------------------------  -----------------------------------  -----------------------------------  -----------------
+//--------------------------------Funciones del sistema------------------------------------
+
+double ReadVoltage(byte pin);
+void deepsleep(int time2sleep);
+int checking_battery();
+
+void check_first_WiFi();
+
+void turn_modem_on();
 
 
-//------------------  -----------------------------------  -----------------------------------  -----------------------------------  -----------------
-//------------------  -----------------------------------  -----------------------------------  -----------------------------------  -----------------
-//------------------  -----------------------------------  -----------------------------------  -----------------------------------  -----------------
-//------------------  -----------------------------------  -----------------------------------  -----------------------------------  -----------------
 
+int16_t setting_wifi();
+void starting_wifi();
+void deepsleep_beep(int deepsleep_time, unsigned long beep_time);
+void get_LOCAL_SN();
+
+void NodeExistance();
+void turn_modem_off();
+int16_t real_sleep_time();
+void check_registered();
+
+void depth_request();
+void check_configuration();
+
+void moving_average_sensor();
+void get_ports_sensor();
+
+void update_firmware( String file);
+bool verify_json ( String new_firmware_ver, String current_firmware_ver, int built, int chk);
+int FirmwareCheck();
+void read_OpenWeather();
+void get_environment_sensor();
+
+void get_neolink_status();
+
+void transform_variables();
+
+void get_neonodes_signals();
+
+void compatibility_error();
+void FORCED_RESET_TASK();
+void send_cloud();
+void config_LoRa();
+void sendMessage(String outgoing);
+String onReceive(int packetSize);
+void TestConnection ();
+void starting_wifi();
+void config_Neonode();
+void Data();
+
+void LoRa_Communication(int command);
+
+String httpGETRequest(const char* serverName);
+void setClock();
+String getValue(String data, char separator, int index);
+//--------------------------------------------------------
+//--------------------------------------------------------
+//--------------------------------------------------------
 void setup() {
 
   pinMode(ARDUINO_RESTART, OUTPUT);
@@ -469,7 +539,7 @@ void setup() {
     turn_modem_on();
     
     if (Start_or_Restart) beep.vbeep(250);
-    if(FIRMWARE_MODE == 'DEV'||FIRMWARE_MODE == 'DEV2') deepsleep(1);
+    if(FIRMWARE_MODE == 'DEV'||FIRMWARE_MODE == 'DEV2.2'||FIRMWARE_MODE == 'DEV2.1') deepsleep(1);
     deepsleep(SLEEP_TIME_PRE);
 
 
@@ -510,7 +580,7 @@ void setup() {
     if (INCOMPATIBILIDAD_FIRMWARE_ERROR) compatibility_error();
 
     if (is_registered) {
-      if(!FIRMWARE_MODE == 'DEV2'){
+      if(!FIRMWARE_MODE == 'DEV2.2'){
         check_configuration();
         get_ports_sensor();
         get_environment_sensor();//BME
@@ -521,7 +591,7 @@ void setup() {
       get_neonodes_signals(); // LoRa
       send_cloud();  
         //if (MODE_PRG)  start_MODE_PRG = millis();
-      config_LoRa();
+      LoRa_Communication(1);
 
 
     }
@@ -548,7 +618,7 @@ void check_first_WiFi(){
 
 
 int checking_battery() {
-  if(FIRMWARE_MODE == 'DEV'||FIRMWARE_MODE == 'DEV2') return 1;
+if(FIRMWARE_MODE == 'DEV'||FIRMWARE_MODE == 'DEV2.2'||FIRMWARE_MODE == 'DEV2.1') return 1;
   Serial.println("Checking Battery.. ");
   pinMode(BAT_VALUE, INPUT_PULLDOWN);
   pinMode(SOLAR_VALUE, INPUT);
@@ -3241,6 +3311,7 @@ void config_LoRa(){
   */
 
 }
+
 void sendMessage(String outgoing)
 {
   LoRa.beginPacket();                   // start packet
@@ -3251,4 +3322,234 @@ void sendMessage(String outgoing)
   LoRa.print(outgoing);                 // add message
   LoRa.endPacket();                     // finish packet and send it
   msgCount++;                           // increment message ID
+}
+
+String onReceive(int packetSize)
+{
+
+  if (packetSize == 0) return incoming;          // if there's no packet, return
+  
+  incoming="";
+  // read packet header bytes:
+  int recipient = LoRa.read();          // recipient address
+  byte sender = LoRa.read();            // sender address
+  byte incomingMsgId = LoRa.read();     // incoming msg ID
+  byte incomingLength = LoRa.read();    // incoming msg length
+
+
+
+  while (LoRa.available())
+  {
+    incoming += (char)LoRa.read();
+  }
+
+  if (incomingLength != incoming.length())
+  {   // check length for error
+    Serial.println("error: message length does not match length");
+    return "";                             // skip rest of function
+  }
+
+  // if the recipient isn't this device or broadcast,
+  if (recipient != localAddress && recipient != 0xFF) {
+    Serial.println("This message is not for me.");
+    return "";                             // skip rest of function
+  }
+
+  // if message is for this device, or broadcast, print details:
+  Serial.println("Received from: 0x" + String(sender, HEX));
+  Serial.println("Sent to: 0x" + String(recipient, HEX));
+  Serial.println("Message ID: " + String(incomingMsgId));
+  Serial.println("Message length: " + String(incomingLength));
+  Serial.println("Message: " + incoming);
+  Serial.println("RSSI: " + String(LoRa.packetRssi()));
+  Serial.println("Snr: " + String(LoRa.packetSnr()));
+  Serial.println();
+  return incoming;
+}
+
+
+void check_Sender (byte sender_address){
+      //si el que envía es el NeoNode 1.
+      if(sender_address==0x01){
+      
+      //si el que envía es el NeoNode 2.
+      } else if (sender_address==0x02){
+  
+
+      //si el que envía es el NeoNode 3.
+      } else if (sender_address==0x03){
+
+      }
+}
+
+void TestConnection (){
+
+  
+  unsigned long start_time = millis();
+  String msg = "";
+
+
+  while((millis()-start_time <=20000)&&(LoRa.parsePacket()==0)){
+    if (millis() - lastSendTime > interval){
+      String message = "TEST";   // send a message
+      sendMessage(message);
+      Serial.println("Sending " + message);
+      lastSendTime = millis();            // timestamp the message
+      interval = random(2000) + 1000;    // 2-3 seconds
+    }
+
+    //esperar recibir algo
+    msg = onReceive(LoRa.parsePacket());
+  } 
+  
+  int msg_length;
+  
+  msg_length = msg.length();
+  char msg2[msg_length];
+  msg.toCharArray(msg2,msg_length+1);
+  char compare[]="CONNECT";
+
+  if(strcmp(msg2, compare) == 0){
+    Serial.println("CONNECT MESSAGE RECEIVED");
+    incoming = "";
+
+    unsigned long start_time2 = millis();
+    while(millis()-start_time2 <=20000){
+      String message = "CONNECTED";   // send a message
+      sendMessage(message);
+      Serial.println("Sending " + message);
+      lastSendTime = millis();            // timestamp the message
+      interval = random(2000) + 1000;    // 2-3 seconds 
+    } 
+    } else {
+
+      Serial.println("NO RESPONSE FROM NEONODE");
+    }
+    
+}
+
+void config_Neonode(){
+  
+  unsigned long start_time = millis();
+  String msg = "";
+
+  while((millis()-start_time <=20000)&&(LoRa.parsePacket()==0)){
+    if (millis() - lastSendTime > interval){
+      String message = "CONFIG";   // send a message
+      sendMessage(message);
+      Serial.println("Sending " + message);
+      lastSendTime = millis();            // timestamp the message
+      interval = random(2000) + 1000;    // 2-3 seconds
+    }
+
+    
+
+    //esperar recibir algo
+    msg = onReceive(LoRa.parsePacket());
+  } 
+  
+  int msg_length;
+  
+  msg_length = msg.length();
+  char msg2[msg_length];
+  msg.toCharArray(msg2,msg_length+1);
+  char compare[]="CONFIRMATION";
+
+  if(strcmp(msg2, compare) == 0){
+    Serial.println("CONFIRMATION MESSAGE RECEIVED");
+    incoming = "";
+
+    //Se envían los parámetros de configuración
+    unsigned long start_time2 = millis();
+    while(millis()-start_time2 <=20000){ 
+      String message = ":13:43:25:23:03:2021";   // send a message
+      sendMessage(message);
+      Serial.println("Sending " + message);
+      lastSendTime = millis();            // timestamp the message
+      interval = random(2000) + 1000;    // 2-3 seconds 
+    }  
+    } else {
+
+      Serial.println("NO RESPONSE FROM NEONODE");
+    }
+ 
+}
+
+
+void Data(){
+  unsigned long start_time = millis();
+  String msg = "";
+
+
+  while((millis()-start_time <=20000)&&(LoRa.parsePacket()==0)){
+    if (millis() - lastSendTime > interval){
+      String message = "DATA";   // send a message
+      sendMessage(message);
+      Serial.println("Sending " + message);
+      lastSendTime = millis();            // timestamp the message
+      interval = random(2000) + 1000;    // 2-3 seconds
+    }
+
+    //esperar recibir algo
+    msg = onReceive(LoRa.parsePacket());
+  } 
+  
+  int msg_length;
+  
+  msg_length = msg.length();
+  char msg2[msg_length];
+  msg.toCharArray(msg2,msg_length+1);
+  char compare[]="DATARESP";
+  String JSONMessage;
+
+  if(strcmp(msg2, compare) == 0){
+    Serial.println("DATARESP MESSAGE RECEIVED");
+    incoming = "";
+
+    unsigned long start_time2 = millis();
+    while((millis()-start_time2 <=20000)&&(LoRa.parsePacket()==0)){
+      String message = "SENDDATA";   // send a message
+      sendMessage(message);
+      Serial.println("Sending " + message);
+      lastSendTime = millis();            // timestamp the message
+      interval = random(2000) + 1000;    // 2-3 seconds 
+
+      JSONMessage = onReceive(LoRa.parsePacket());
+    }
+
+    //Se recibe la data en JSONMessage en formato JSON.
+    
+
+    } else {
+
+      Serial.println("NO RESPONSE FROM NEONODE");
+    }
+    
+}
+
+//Si command=1 -> TEST
+//Si command=2 -> CONFIGURATION
+//Si command=3 -> DATA
+void LoRa_Communication(int command){
+  
+  //se configura el LoRa para recepción/envío de data (pines, frecuencia, potencia).
+  config_LoRa();
+  Serial.println("LoRa Config done");
+
+  //TEST
+  if (command==1){
+    Serial.println("TEST MODE...");
+    TestConnection();
+
+    //CONFIGURATION
+  } else if (command==2){
+    Serial.println("CONFIGURATION MODE...");
+    config_Neonode();
+
+    //DATA
+  } else if (command==3){
+    Serial.println("DATA MODE...");
+    Data();
+  }
+
 }
