@@ -304,6 +304,39 @@ float P4_humidity_m3m3;
 float P4_aparent_perm;
 float P4_pore_perm;
 float P4_water_pore_cond;
+//-----Neonode variables----------------------------
+float P1_humidity_m3m3_nn;
+float P1_aparent_perm_nn;
+float P1_pore_perm_nn;
+float P1_water_pore_cond_nn;
+
+float P2_humidity_m3m3_nn;
+float P2_aparent_perm_nn;
+float P2_pore_perm_nn;
+float P2_water_pore_cond_nn;
+
+float P3_humidity_m3m3_nn;
+float P3_aparent_perm_nn;
+float P3_pore_perm_nn;
+float P3_water_pore_cond_nn;
+
+float P4_humidity_m3m3_nn;
+float P4_aparent_perm_nn;
+float P4_pore_perm_nn;
+float P4_water_pore_cond_nn;
+
+float dry_bulb_temp_mov_nn;
+float dry_bulb_temp_nn;
+float barometric_pressure_nn;
+float relative_humidity_nn;
+float relative_humidity_aux_nn;
+float pressure_altitude_nn;
+float battery_voltage_nn;
+float solar_voltage_nn;
+float internal_temperature_nn;
+float internal_temperature_raw_nn;
+float dry_bulb_temp_aux_nn;
+float nn_variables[27];
 
 
 
@@ -458,12 +491,12 @@ void send_cloud();
 void config_LoRa();
 void sendMessage(String outgoing);
 String onReceive(int packetSize);
-void TestConnection ();
-void starting_wifi();
-void config_Neonode();
-void Data();
+String reciveBig();
+bool Comparator_msg(String msg1,String msg2);
+bool Comparator(String msg);
+void sendDeepSleep();
+void LoRa_Communication();
 
-void LoRa_Communication(int command);
 
 String httpGETRequest(const char* serverName);
 void setClock();
@@ -588,10 +621,9 @@ void setup() {
    
       get_neolink_status(); //solar, internal temp
       transform_variables();
-      get_neonodes_signals(); // LoRa
       send_cloud();  
         //if (MODE_PRG)  start_MODE_PRG = millis();
-      LoRa_Communication(1);
+    
 
 
     }
@@ -3368,188 +3400,128 @@ String onReceive(int packetSize)
 }
 
 
-void check_Sender (byte sender_address){
-      //si el que envía es el NeoNode 1.
-      if(sender_address==0x01){
-      
-      //si el que envía es el NeoNode 2.
-      } else if (sender_address==0x02){
-  
-
-      //si el que envía es el NeoNode 3.
-      } else if (sender_address==0x03){
-
-      }
-}
-
-void TestConnection (){
-
-  
-  unsigned long start_time = millis();
-  String msg = "";
 
 
-  while((millis()-start_time <=20000)&&(LoRa.parsePacket()==0)){
-    if (millis() - lastSendTime > interval){
-      String message = "TEST";   // send a message
-      sendMessage(message);
-      Serial.println("Sending " + message);
-      lastSendTime = millis();            // timestamp the message
-      interval = random(2000) + 1000;    // 2-3 seconds
+void Transform_NN_variables(String message){
+dry_bulb_temp_mov_nn=getValue(message,':',1).toFloat();
+dry_bulb_temp_nn=getValue(message,':',2).toFloat();
+barometric_pressure_nn=getValue(message,':',3).toFloat();
+relative_humidity_nn=getValue(message,':',4).toFloat();
+relative_humidity_aux_nn=getValue(message,':',5).toFloat();
+pressure_altitude_nn=getValue(message,':',6).toFloat();
+battery_voltage_nn=getValue(message,':',7).toFloat();
+solar_voltage_nn=getValue(message,':',8).toFloat();
+internal_temperature_nn=getValue(message,':',9).toFloat();
+internal_temperature_raw_nn=getValue(message,':',10).toFloat();
+dry_bulb_temp_aux_nn=getValue(message,':',11).toFloat();
+
+P1_humidity_m3m3_nn=getValue(message,':',12).toFloat();
+P1_aparent_perm_nn=getValue(message,':',13).toFloat();
+P1_pore_perm_nn=getValue(message,':',14).toFloat();
+P1_water_pore_cond_nn=getValue(message,':',15).toFloat();
+
+P2_humidity_m3m3_nn=getValue(message,':',16).toFloat();
+P2_aparent_perm_nn=getValue(message,':',17).toFloat();
+P2_pore_perm_nn=getValue(message,':',18).toFloat();
+P2_water_pore_cond_nn=getValue(message,':',19).toFloat();
+
+P3_humidity_m3m3_nn=getValue(message,':',20).toFloat();
+P3_aparent_perm_nn=getValue(message,':',21).toFloat();
+P3_pore_perm_nn=getValue(message,':',22).toFloat();
+P3_water_pore_cond_nn=getValue(message,':',23).toFloat();
+
+P4_humidity_m3m3_nn=getValue(message,':',24).toFloat();
+P4_aparent_perm_nn=getValue(message,':',25).toFloat();
+P4_pore_perm_nn=getValue(message,':',26).toFloat();
+P4_water_pore_cond_nn=getValue(message,':',27).toFloat();
+
+} 
+String reciveBig(){
+  long start=millis();
+  String msg;
+  String msg_prev;
+  String message;
+  long start_time;
+  int packetsize=0;
+  bool control=true;
+  bool flag;
+
+  while(control){
+    if(Comparator_msg(msg,msg_prev)){
+    message=message+msg;
+    Serial.println(message);
     }
-
-    //esperar recibir algo
-    msg = onReceive(LoRa.parsePacket());
-  } 
-  
-  int msg_length;
-  
-  msg_length = msg.length();
-  char msg2[msg_length];
-  msg.toCharArray(msg2,msg_length+1);
-  char compare[]="CONNECT";
-
-  if(strcmp(msg2, compare) == 0){
-    Serial.println("CONNECT MESSAGE RECEIVED");
-    incoming = "";
-
-    unsigned long start_time2 = millis();
-    while(millis()-start_time2 <=20000){
-      String message = "CONNECTED";   // send a message
-      sendMessage(message);
-      Serial.println("Sending " + message);
-      lastSendTime = millis();            // timestamp the message
-      interval = random(2000) + 1000;    // 2-3 seconds 
-    } 
-    } else {
-
-      Serial.println("NO RESPONSE FROM NEONODE");
+    msg_prev=msg;
+    Serial.println(message);
+    while(packetsize==0){
+      packetsize=LoRa.parsePacket();
     }
-    
-}
-
-void config_Neonode(){
-  
-  unsigned long start_time = millis();
-  String msg = "";
-
-  while((millis()-start_time <=20000)&&(LoRa.parsePacket()==0)){
-    if (millis() - lastSendTime > interval){
-      String message = "CONFIG";   // send a message
-      sendMessage(message);
-      Serial.println("Sending " + message);
-      lastSendTime = millis();            // timestamp the message
-      interval = random(2000) + 1000;    // 2-3 seconds
-    }
-
-    
-
-    //esperar recibir algo
-    msg = onReceive(LoRa.parsePacket());
-  } 
-  
-  int msg_length;
-  
-  msg_length = msg.length();
-  char msg2[msg_length];
-  msg.toCharArray(msg2,msg_length+1);
-  char compare[]="CONFIRMATION";
-
-  if(strcmp(msg2, compare) == 0){
-    Serial.println("CONFIRMATION MESSAGE RECEIVED");
-    incoming = "";
-
-    //Se envían los parámetros de configuración
-    unsigned long start_time2 = millis();
-    while(millis()-start_time2 <=20000){ 
-      String message = ":13:43:25:23:03:2021";   // send a message
-      sendMessage(message);
-      Serial.println("Sending " + message);
-      lastSendTime = millis();            // timestamp the message
-      interval = random(2000) + 1000;    // 2-3 seconds 
-    }  
-    } else {
-
-      Serial.println("NO RESPONSE FROM NEONODE");
-    }
- 
-}
-
-
-void Data(){
-  unsigned long start_time = millis();
-  String msg = "";
-
-
-  while((millis()-start_time <=20000)&&(LoRa.parsePacket()==0)){
-    if (millis() - lastSendTime > interval){
-      String message = "DATA";   // send a message
-      sendMessage(message);
-      Serial.println("Sending " + message);
-      lastSendTime = millis();            // timestamp the message
-      interval = random(2000) + 1000;    // 2-3 seconds
-    }
-
-    //esperar recibir algo
-    msg = onReceive(LoRa.parsePacket());
-  } 
-  
-  int msg_length;
-  
-  msg_length = msg.length();
-  char msg2[msg_length];
-  msg.toCharArray(msg2,msg_length+1);
-  char compare[]="DATARESP";
-  String JSONMessage;
-
-  if(strcmp(msg2, compare) == 0){
-    Serial.println("DATARESP MESSAGE RECEIVED");
-    incoming = "";
-
-    unsigned long start_time2 = millis();
-    while((millis()-start_time2 <=20000)&&(LoRa.parsePacket()==0)){
-      String message = "SENDDATA";   // send a message
-      sendMessage(message);
-      Serial.println("Sending " + message);
-      lastSendTime = millis();            // timestamp the message
-      interval = random(2000) + 1000;    // 2-3 seconds 
-
-      JSONMessage = onReceive(LoRa.parsePacket());
-    }
-
-    //Se recibe la data en JSONMessage en formato JSON.
-    
-
-    } else {
-
-      Serial.println("NO RESPONSE FROM NEONODE");
-    }
-    
-}
-
-//Si command=1 -> TEST
-//Si command=2 -> CONFIGURATION
-//Si command=3 -> DATA
-void LoRa_Communication(int command){
-  
-  //se configura el LoRa para recepción/envío de data (pines, frecuencia, potencia).
-  config_LoRa();
-  Serial.println("LoRa Config done");
-
-  //TEST
-  if (command==1){
-    Serial.println("TEST MODE...");
-    TestConnection();
-
-    //CONFIGURATION
-  } else if (command==2){
-    Serial.println("CONFIGURATION MODE...");
-    config_Neonode();
-
-    //DATA
-  } else if (command==3){
-    Serial.println("DATA MODE...");
-    Data();
+    msg=onReceive(packetsize);
+    Serial.println(msg);
+    control=Comparator(msg);
+    packetsize=0;
   }
-
+ Serial.println(message);
+ return message;
+}
+bool Comparator_msg(String msg1,String msg2){
+  int length1=msg1.length();
+  int length2=msg2.length();
+  char msga[length1];
+  char msgb[length2];
+  msg1.toCharArray(msga,length1+1);
+  msg2.toCharArray(msgb,length2+1);
+  if(strcmp(msga,msgb)==0){
+    Serial.print("iguales");
+    return false;
+  } else {
+    Serial.println("diferentes");
+    return true;
+  }
+}
+bool Comparator(String msg){
+  char compare[]="FIN";
+  int length=msg.length();
+  char msg2[length];
+  msg.toCharArray(msg2,length+1);
+  if(strcmp(msg2,compare)==0){
+    return false;
+  }else 
+  {
+    return true;
+  }
+}
+void LoRa_Communication(){
+    long start=millis();
+  config_LoRa();
+  String sms;
+  String msg;
+  int16_t msg_length;
+  long start_time;
+  String message="DATA";
+  int packetsize=0;
+  delay(500);
+  while(millis()-start_time<=1000){
+    sendMessage(message);
+    Serial.println(message);
+    Serial.println(packetsize);
+  }
+  sms=reciveBig();
+  Serial.println(sms);
+  Transform_NN_variables(sms);
+  sendDeepSleep();
+}
+void sendDeepSleep(){
+  int16_t sleep_timee;
+   if (actual_hour > N_END_HOUR && actual_hour < N_START_HOUR) {
+    sleep_timee = int(SLEEP_TIME) - (actual_min * 60 + actual_secs) % int(SLEEP_TIME) - (millis()) / 1000;
+    if (sleep_timee <= 0) sleep_timee = sleep_timee + int(SLEEP_TIME);
+  } else
+  {
+    Serial.println("N_SLEEP_TIME set.");
+    sleep_timee = int(N_SLEEP_TIME) - (actual_min * 60 + actual_secs) % int(N_SLEEP_TIME) - (millis()) / 1000;
+    if (sleep_timee <= 0) sleep_timee = sleep_timee + int(N_SLEEP_TIME);
+  }
+  SLEEP_TIME_modem = sleep_timee - SLEEP_TIME_PRE + 10;
+  sendMessage(String(SLEEP_TIME_modem));
 }
