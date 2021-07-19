@@ -1,0 +1,9 @@
+{
+    "1" : {
+        
+        "firmware_ver": "1.0.6",
+        "built": 97,
+        "chk": 45,
+        "file": "https://d21qgpnvfofvnx.cloudfront.net/NeoLink_1.0.6.ino.wifi_lora_32_V2.bin"
+         }
+}

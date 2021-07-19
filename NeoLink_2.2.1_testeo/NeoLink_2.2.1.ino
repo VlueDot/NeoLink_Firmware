@@ -60,7 +60,7 @@ const String FIRMWARE_VER = "2.0.0";
 //const double BUILT = 552;
 const char* HARDWARE_VER = "2.0";
 
-#define FIRMWARE_MODE 'DEV2.2'
+#define FIRMWARE_MODE 'DEV2.2.1'
 
 #if FIRMWARE_MODE == 'PRO'
   #define FIREBASE_HOST "https://neolink-934b4.firebaseio.com"
@@ -93,6 +93,15 @@ const char* HARDWARE_VER = "2.0";
   const String WIFI_SSID_DEFAULT = "LINUX1";
   const String WIFI_PSSWD_DEFAULT = "123456789abc";
   byte localAddress = 0xBB; //address of this device.
+  byte destination = 0x01; //destination to send to.
+
+#elif FIRMWARE_MODE == 'DEV.2.2.1'
+  #define FIREBASE_HOST "https://neolink-b2f81-default-rtdb.firebaseio.com"
+  #define FIREBASE_AUTH "P2aDr6F6P1XZQ3zc7k4ABuPBT9o5szLwFHphsqZt"
+  #define UPDATE_JSON_URL  "https://test-firmware-neolink.s3.us-east-2.amazonaws.com/firmware_dev.json"
+  const String WIFI_SSID_DEFAULT = "LINUX1";
+  const String WIFI_PSSWD_DEFAULT = "123456789abc";  
+    byte localAddress = 0xBB; //address of this device.
   byte destination = 0x01; //destination to send to.
 
 #endif
@@ -500,7 +509,7 @@ bool Comparator(String msg);
 void sendDeepSleep();
 String Transform_Variables(String msg,int n_var,int Port_Active);
 void LoRa_Communication();
-
+void get_ports_sensor_test(String message);
 
 String httpGETRequest(const char* serverName);
 void setClock();
@@ -535,15 +544,14 @@ void setup() {
   Serial.begin(115200);
 
   EEPROM.begin(11);
-
+   
   String sn_temporal="XX0000-0000";
   for(int i=0; i<11;i++) {
     //Serial.println((char)EEPROM.read(i)); 
     sn_temporal[i]=(char)EEPROM.read(i);
   }
-
+  SN=sn_temporal;
   //SN_WE= sn_temporal + '\0';
-  SN = sn_temporal;
   chipid = ESP.getEfuseMac(); //The chip ID is essentially its MAC address(length: 6 bytes).
   chipid_str = String((uint16_t)(chipid >> 32), HEX) + String((uint32_t)chipid, HEX);
   
@@ -576,7 +584,7 @@ void setup() {
     turn_modem_on();
     
     if (Start_or_Restart) beep.vbeep(250);
-    if(FIRMWARE_MODE == 'DEV'||FIRMWARE_MODE == 'DEV2.2'||FIRMWARE_MODE == 'DEV2.1') deepsleep(1);
+    if(FIRMWARE_MODE == 'DEV'||FIRMWARE_MODE == 'DEV2.2'||FIRMWARE_MODE == 'DEV2.1'||FIRMWARE_MODE =='DEV2.2.1') deepsleep(1);
     deepsleep(SLEEP_TIME_PRE);
 
 
@@ -617,13 +625,26 @@ void setup() {
     if (INCOMPATIBILIDAD_FIRMWARE_ERROR) compatibility_error();
 
     if (is_registered) {
-      if(!FIRMWARE_MODE == 'DEV2.2'){
+      
+      if(FIRMWARE_MODE == 'DEV2.2.1'){
+        String message = "%_-3235.2 20.2 15.2_-3105.5 20.2 15.4_-2969.8 20.2 15_g%_-3036.4 20.2_-3006.5 20.2_k %P3 %P4 %$";
         check_configuration();
-        get_ports_sensor();
-        get_environment_sensor();//BME
-      } 
+        get_ports_sensor_test(message);
+        dry_bulb_temp=17;
+        barometric_pressure=14.5;
+        relative_humidity=12.46;
+        relative_humidity_aux=9.71;
+        pressure_altitude=10;
+        battery_voltage=22.7;
+        solar_voltage=20;
+        internal_temperature=22.22;
+        internal_temperature_raw=15.68;
+        dry_bulb_temp_aux=8.25;
+        wind_speed=10.06;
+        wind_deg=15;
+      }
    
-      get_neolink_status(); //solar, internal temp
+      //get_neolink_status(); //solar, internal temp
       send_cloud();  
         //if (MODE_PRG)  start_MODE_PRG = millis();
     
@@ -653,7 +674,7 @@ void check_first_WiFi(){
 
 
 int checking_battery() {
-if(FIRMWARE_MODE == 'DEV'||FIRMWARE_MODE == 'DEV2.2'||FIRMWARE_MODE == 'DEV2.1') return 1;
+if(FIRMWARE_MODE == 'DEV'||FIRMWARE_MODE == 'DEV2.2'||FIRMWARE_MODE == 'DEV2.1'||FIRMWARE_MODE == 'DEV2.2.1') return 1;
   Serial.println("Checking Battery.. ");
   pinMode(BAT_VALUE, INPUT_PULLDOWN);
   pinMode(SOLAR_VALUE, INPUT);
@@ -1080,7 +1101,8 @@ void get_ports_sensor() {
   int8_t sample_div[50];
   int16_t eos; //end of string
   int16_t m = 0;
-  int8_t n = 0; // counter ports
+  int16_t n=0;
+
   int8_t try_counter = 0;
   float average;
   //String port1_msg;
@@ -1178,6 +1200,7 @@ void get_ports_sensor() {
     port3_msg=getValue(message,'%',3);
     port4_msg=getValue(message,'%',4);
     
+    
    
     Serial.println(port1_msg);
     Serial.println(port2_msg);
@@ -1198,19 +1221,14 @@ void get_ports_sensor() {
 
     port1_msg_len = port1_msg.length();
 
-    if (port1_msg_len > 0) {
+    if (port1_msg_len > 0 ) {
       int8_t n_samples = 0;
       int8_t n_var_init=0;
       for (int i = 0; i <= port1_msg_len ; i++) {
-        if (port1_msg[i] == '_') {
-          n_samples++;
-        }
+        if (port1_msg[i] == '_') n_samples++;
+        if (port1_msg[i] == ' ') n_var_init++;
       }
-      for (int i = 0; i <= port1_msg_len ; i++) {
-        if (port1_msg[i] == ' ') {
-          n_var_init++;
-        }
-      }
+      if(n_samples>0){
       int8_t n_var=n_var_init/(n_samples-1)+1;
       String P1_to_transform=getValue(port1_msg,'_',0);
       for(int i=0; i<n_var;i++){
@@ -1249,30 +1267,28 @@ void get_ports_sensor() {
       //Serial.println(port1_sample3);
       Serial.println(getValue(port1_msg,'_',n_samples));
       message_Json_port1=Transform_Variables(P1_to_transform,n_var,Port1_Active);
-    }
-    else {
+    }else {
       Port1_Active = 0;
       Serial.print("Port1_Active ");
       Serial.println(Port1_Active);
     }
+    }
+
+    
     Serial.println(message_Json_port1);
 
     //--------------------------------PORT2-----------------------------------------------
+    Serial.println("--------------------------- PORT 2 -----------------------------")
    port2_msg_len = port2_msg.length();
 
-    if (port2_msg_len > 0) {
+    if (port2_msg_len > 0 ) {
       int8_t n_samples = 0;
       int8_t n_var_init=0;
       for (int i = 0; i <= port2_msg_len ; i++) {
-        if (port2_msg[i] == '_') {
-          n_samples++;
-        }
+        if (port2_msg[i] == '_') n_samples++;
+         if (port2_msg[i] == ' ')n_var_init++;
       }
-      for (int i = 0; i <= port2_msg_len ; i++) {
-        if (port2_msg[i] == ' ') {
-          n_var_init++;
-        }
-      }
+      if(n_samples>0){
       int8_t n_var=n_var_init/(n_samples-1)+1;
       String P2_to_transform=getValue(port2_msg,'_',0);
       for(int i=0; i<n_var;i++){
@@ -1293,31 +1309,27 @@ void get_ports_sensor() {
 
       Serial.println(getValue(port2_msg,'_',n_samples));
       message_Json_port2=Transform_Variables(P2_to_transform,n_var,Port2_Active);
-    }
-    else {
+    } else {
       Port2_Active = 0;
       Serial.print("Port2_Active ");
       Serial.println(Port2_Active);
     }
+    }
+   
     Serial.println(message_Json_port2);
 
     //--------------------------------PORT3-----------------------------------------------
     Serial.println("--------------------------- PORT 3 -----------------------------");
 
     port3_msg_len = port3_msg.length();
-    if (port3_msg_len > 0) {
+    if (port3_msg_len > 0 ) {
       int8_t n_samples = 0;
       int8_t n_var_init=0;
       for (int i = 0; i <= port3_msg_len ; i++) {
-        if (port3_msg[i] == '_') {
-          n_samples++;
-        }
+        if (port3_msg[i] == '_') n_samples++;
+        if (port3_msg[i] == ' ') n_var_init++;
       }
-      for (int i = 0; i <= port3_msg_len ; i++) {
-        if (port3_msg[i] == ' ') {
-          n_var_init++;
-        }
-      }
+      if(n_samples>0){
       int8_t n_var=n_var_init/(n_samples-1)+1;
       String P3_to_transform=getValue(port3_msg,'_',0);
       for(int i=0; i<n_var;i++){
@@ -1338,12 +1350,13 @@ void get_ports_sensor() {
 
       Serial.println(getValue(port3_msg,'_',n_samples));
       message_Json_port3=Transform_Variables(P3_to_transform,n_var,Port3_Active);
-    }
-    else {
+    } else {
       Port3_Active = 0;
       Serial.print("Port3_Active ");
       Serial.println(Port3_Active);
     }
+    }
+   
     Serial.println(message_Json_port3);
 
     //--------------------------------PORT4-----------------------------------------------
@@ -1354,15 +1367,10 @@ void get_ports_sensor() {
       int8_t n_samples = 0;
       int8_t n_var_init=0;
       for (int i = 0; i <= port4_msg_len ; i++) {
-        if (port4_msg[i] == '_') {
-          n_samples++;
-        }
+        if (port4_msg[i] == '_') n_samples++;
+        if (port4_msg[i] == ' ') n_var_init++;
       }
-      for (int i = 0; i <= port4_msg_len ; i++) {
-        if (port4_msg[i] == ' ') {
-          n_var_init++;
-        }
-      }
+      if(n_samples>0){
       int8_t n_var=n_var_init/(n_samples-1)+1;
       String P4_to_transform=getValue(port4_msg,'_',0);
       for(int i=0; i<n_var;i++){
@@ -1383,12 +1391,13 @@ void get_ports_sensor() {
 
       Serial.println(getValue(port4_msg,'_',n_samples));
       message_Json_port4=Transform_Variables(P4_to_transform,n_var,Port4_Active);
-    }
-    else {
+    } else {
       Port4_Active = 0;
       Serial.print("Port4_Active ");
       Serial.println(Port4_Active);
     }
+    }
+   
     Serial.println(message_Json_port4);
 
     //-------------------------------------------------------------------------------
@@ -1397,10 +1406,8 @@ void get_ports_sensor() {
 
   }
   else Serial.println("No Port sensing  request.");
-  Serial.println();
 }
 //------------------------------------------------------------------
-
 void moving_average_sensor() {
   
   if (Port1_Active) {
@@ -1729,10 +1736,8 @@ void get_environment_sensor() {
     delay(750);
     
 
-
+   
     status_atm = bme_static.begin(0x76);
-    
-
     status_atm_aux = bme_aux.begin(0x77);
 
     if(!status_atm_aux) {
@@ -3348,4 +3353,220 @@ String Transform_Variables(String msg,int n_var,int Port_Active){
     }
   } else msg_Json="NaN";
   return msg_Json;
+}
+void get_ports_sensor_test(String message){
+   
+   float average; 
+
+    port1_msg=getValue(message,'%',1);
+    port2_msg=getValue(message,'%',2);
+    port3_msg=getValue(message,'%',3);
+    port4_msg=getValue(message,'%',4);
+    
+   
+    Serial.println(port1_msg);
+    Serial.println(port2_msg);
+    Serial.println(port3_msg);
+    Serial.println(port4_msg);
+
+
+
+    /*
+      01:11:12.511 -> %P1_-3235.2 20.2_-3105.5 20.2_-2969.8 20.2_k%P2_-3036.4 20.2_-3006.5 20.2_k%P3 %P4 $
+      01:11:12.511 -> -3235.2 20.2_-3105.5 20.2_-2969.8 20.2_k
+      01:11:12.511 -> -3036.4 20.2_-3006.5 20.2_k
+
+    */
+
+
+    Serial.println("--------------------------- PORT 1 -----------------------------");
+
+    port1_msg_len = port1_msg.length();
+
+    if (port1_msg_len > 0) {
+      int8_t n_samples = 0;
+      int8_t n_var_init=0;
+      for (int i = 0; i <= port1_msg_len ; i++) {
+        if (port1_msg[i] == '_') {
+          n_samples++;
+        }
+      }
+      for (int i = 0; i <= port1_msg_len ; i++) {
+        if (port1_msg[i] == ' ') {
+          n_var_init++;
+        }
+      }
+      int8_t n_var=n_var_init/(n_samples-1)+1;
+      String P1_to_transform=getValue(port1_msg,'_',0);
+      for(int i=0; i<n_var;i++){
+        average=0;
+         for(int j=1;j<=n_samples-1;j++){
+          average=average+getValue(getValue(port1_msg,'_',j),' ',i).toFloat();
+         }
+         average=average/(n_samples-1);
+         P1_to_transform=P1_to_transform+":"+"V"+String(i+1)+":"+String(average);
+      }
+      P1_to_transform=P1_to_transform+":"+getValue(port1_msg,'_',n_samples);
+      Serial.println(P1_to_transform);
+
+      /*port1_sample1 = port1_msg.substring(0, sample_div[0]);
+      port1_sample2 = port1_msg.substring(sample_div[0] + 1 , sample_div[1]);
+      port1_sample3 = port1_msg.substring(sample_div[1] + 1, port1_msg_len - 2);
+      port1_type = port1_msg.substring(port1_msg_len - 1, port1_msg_len);*/
+
+      //Serial.println(port1_msg);
+
+      /* int8_t n_samples = 0;
+        if (port1_sample1.length() > 1) n_samples++;
+        if (port1_sample2.length() > 1) n_samples++;
+        if (port1_sample3.length() > 1) n_samples++;
+        Serial.println("n_samples: " + String(n_samples)); */
+      Port1_Active = 1;
+      Serial.print("Port1_Active ");
+      Serial.println(Port1_Active);
+
+      //Serial.println("n_samples: " + String(n_samples));
+
+
+
+      //Serial.println(port1_sample1);
+      //Serial.println(port1_sample2);
+      //Serial.println(port1_sample3);
+      Serial.println(getValue(port1_msg,'_',n_samples));
+      message_Json_port1=Transform_Variables(P1_to_transform,n_var,Port1_Active);
+    }
+    else {
+      Port1_Active = 0;
+      Serial.print("Port1_Active ");
+      Serial.println(Port1_Active);
+    }
+    Serial.println(message_Json_port1);
+
+    //--------------------------------PORT2-----------------------------------------------
+    Serial.println("--------------------------- PORT 2 -----------------------------");
+   port2_msg_len = port2_msg.length();
+
+    if (port2_msg_len > 0) {
+      int8_t n_samples = 0;
+      int8_t n_var_init=0;
+      for (int i = 0; i <= port2_msg_len ; i++) {
+        if (port2_msg[i] == '_') {
+          n_samples++;
+        }
+      }
+      for (int i = 0; i <= port2_msg_len ; i++) {
+        if (port2_msg[i] == ' ') {
+          n_var_init++;
+        }
+      }
+      int8_t n_var=n_var_init/(n_samples-1)+1;
+      String P2_to_transform=getValue(port2_msg,'_',0);
+      for(int i=0; i<n_var;i++){
+        average=0;
+         for(int j=1;j<=n_samples-1;j++){
+          average=average+getValue(getValue(port2_msg,'_',j),' ',i).toFloat();
+         }
+         average=average/(n_samples-1);
+         P2_to_transform=P2_to_transform+":"+"V"+String(i+1)+":"+String(average);
+      }
+      P2_to_transform=P2_to_transform+":"+getValue(port2_msg,'_',n_samples);
+      Serial.println(P2_to_transform);
+
+      Port2_Active = 1;
+      Serial.print("Port2_Active ");
+      Serial.println(Port2_Active);
+
+
+      Serial.println(getValue(port2_msg,'_',n_samples));
+      message_Json_port2=Transform_Variables(P2_to_transform,n_var,Port2_Active);
+    }
+    else {
+      Port2_Active = 0;
+      Serial.print("Port2_Active ");
+      Serial.println(Port2_Active);
+    }
+    Serial.println(message_Json_port2);
+
+    //--------------------------------PORT3-----------------------------------------------
+    Serial.println("--------------------------- PORT 3 -----------------------------");
+
+    port3_msg_len = port3_msg.length();
+    if (port3_msg_len > 0 ) {
+      int8_t n_samples = 0;
+      int8_t n_var_init=0;
+      for (int i = 0; i <= port3_msg_len ; i++) {
+        if (port3_msg[i] == '_') n_samples++;
+        if (port3_msg[i] == ' ') n_var_init++;
+      }
+      if(n_samples>0){
+      int8_t n_var=n_var_init/(n_samples-1)+1;
+      String P3_to_transform=getValue(port3_msg,'_',0);
+      for(int i=0; i<n_var;i++){
+        average=0;
+         for(int j=1;j<=n_samples-1;j++){
+          average=average+getValue(getValue(port3_msg,'_',j),' ',i).toFloat();
+         }
+         average=average/(n_samples-1);
+         P3_to_transform=P3_to_transform+":"+"V"+String(i+1)+":"+String(average);
+      }
+      P3_to_transform=P3_to_transform+":"+getValue(port3_msg,'_',n_samples);
+      Serial.println(P3_to_transform);
+
+      Port3_Active = 1;
+      Serial.print("Port3_Active ");
+      Serial.println(Port3_Active);
+
+
+      Serial.println(getValue(port3_msg,'_',n_samples));
+      message_Json_port3=Transform_Variables(P3_to_transform,n_var,Port3_Active);
+    } else {
+      Port3_Active = 0;
+      Serial.print("Port3_Active ");
+      Serial.println(Port3_Active);
+    }
+    }
+   
+    Serial.println(message_Json_port3);
+    //--------------------------------PORT4-----------------------------------------------
+    Serial.println("--------------------------- PORT 4 -----------------------------");
+
+    port4_msg_len = port4_msg.length();
+    if (port4_msg_len > 0) {
+      int8_t n_samples = 0;
+      int8_t n_var_init=0;
+      for (int i = 0; i <= port4_msg_len ; i++) {
+        if (port4_msg[i] == '_') n_samples++;
+        if (port4_msg[i] == ' ') n_var_init++;
+      }
+      if(n_samples>0){
+      int8_t n_var=n_var_init/(n_samples-1)+1;
+      String P4_to_transform=getValue(port4_msg,'_',0);
+      for(int i=0; i<n_var;i++){
+        average=0;
+         for(int j=1;j<=n_samples-1;j++){
+          average=average+getValue(getValue(port4_msg,'_',j),' ',i).toFloat();
+         }
+         average=average/(n_samples-1);
+         P4_to_transform=P4_to_transform+":"+"V"+String(i+1)+":"+String(average);
+      }
+      P4_to_transform=P4_to_transform+":"+getValue(port4_msg,'_',n_samples);
+      Serial.println(P4_to_transform);
+
+      Port4_Active = 1;
+      Serial.print("Port4_Active ");
+      Serial.println(Port4_Active);
+
+
+      Serial.println(getValue(port4_msg,'_',n_samples));
+      message_Json_port4=Transform_Variables(P4_to_transform,n_var,Port4_Active);
+    } else {
+      Port4_Active = 0;
+      Serial.print("Port4_Active ");
+      Serial.println(Port4_Active);
+    }
+    }
+    Serial.println(message_Json_port4);
+
+    //-------------------------------------------------------------------------------
+    Serial.println("--------------------------- END PORT -----------------------------");
 }
