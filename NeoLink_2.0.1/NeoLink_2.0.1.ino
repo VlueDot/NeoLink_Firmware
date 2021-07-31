@@ -69,11 +69,14 @@ const char* HARDWARE_VER = "2";
   const String WIFI_PSSWD_DEFAULT = "123456789a";
 
 #elif FIRMWARE_MODE == 'DEV'
-  #define FIREBASE_HOST "https://neolink-b2f81-default-rtdb.firebaseio.com"
+ #define FIREBASE_HOST "https://neolink-934b4.firebaseio.com"
+  #define FIREBASE_AUTH "IroB3fdbcPb9vxPlJKDJcqmfJgs0KouJGe0sUBKN"
+  #define UPDATE_JSON_URL  "https://firmware-neolink.s3-sa-east-1.amazonaws.com/firmware_pro.json"
+  /*#define FIREBASE_HOST "https://neolink-b2f81-default-rtdb.firebaseio.com"
   #define FIREBASE_AUTH "P2aDr6F6P1XZQ3zc7k4ABuPBT9o5szLwFHphsqZt"
-  #define UPDATE_JSON_URL  "https://test-firmware-neolink.s3.us-east-2.amazonaws.com/firmware_dev.json"
-  const String WIFI_SSID_DEFAULT = "FAMILIA_NORIEGA";
-  const String WIFI_PSSWD_DEFAULT = "968142465";
+  #define UPDATE_JSON_URL  "https://test-firmware-neolink.s3.us-east-2.amazonaws.com/firmware_dev.json"*/
+  const String WIFI_SSID_DEFAULT = "LINUX1";
+  const String WIFI_PSSWD_DEFAULT = "123456789abc";
 
 #endif
 
@@ -311,7 +314,7 @@ RTC_DATA_ATTR int8_t wifi_default = 1;
 RTC_DATA_ATTR int8_t wifi_conf_isSet = 0;  //1 if parameters are defined
 RTC_DATA_ATTR int8_t sim_enable = 0;
 RTC_DATA_ATTR int8_t GPS_RQ = 0;
-RTC_DATA_ATTR int8_t PORT_RQ = 1;
+RTC_DATA_ATTR int8_t PORT_RQ = 0;
 RTC_DATA_ATTR int8_t BEEP_EN = 0;
 RTC_DATA_ATTR int8_t GPS_CLOUD = 0;
 RTC_DATA_ATTR int8_t OBSERVER = 0;
@@ -434,13 +437,13 @@ void setup() {
   if (prg_iteration == 0) {
     Serial.println("\n----------------------------------");
     Serial.println("[STEP 1]: ");
-    /*if (!checking_battery()) 
+    if (checking_battery()) 
      {
       Serial.println(" Not enought energy. Shutting down until battery_hysteresis ");
       deepsleep(POWERLESS_TIME);
 
     }
-    */
+    
     check_first_WiFi();
 
 
@@ -465,7 +468,8 @@ void setup() {
 
    
     
-
+    if (Start_or_Restart) PORT_RQ=0;
+    else PORT_RQ=1; 
     Serial.println("[STEP 2]:" );
     if(SN[0]=='X' || Update_LocalSN_Flag) get_LOCAL_SN();
     else{
@@ -833,7 +837,6 @@ void check_configuration() {
   Firebase.reconnectWiFi(true);
 
 
-
   if (Start_or_Restart || UNNECESARY_MEASURE) {
     Serial.println("Reading new configuration due restart or first run.");
     NewConf_flag = 1;
@@ -846,7 +849,7 @@ void check_configuration() {
 
 
   if (NewConf_flag) {
-    Serial.println(DEVICE + PATH_CONFIGURATION_VALUES + "BAT_H");
+
     Serial.print("Checking new configuration...");
 
 
@@ -858,7 +861,7 @@ void check_configuration() {
     Firebase.getFloat(firebasedata,  DEVICE + PATH_CONFIGURATION_VALUES + "BAT_L");
     BAT_L = firebasedata.floatData();
     Serial.print("\n BAT_L: " + String(BAT_L));
-
+   
     Firebase.getInt(firebasedata,  DEVICE + PATH_CONFIGURATION_VALUES + "BEEP_EN");
     BEEP_EN = firebasedata.intData();
     Serial.print("\n BEEP_EN: " + String(BEEP_EN));
@@ -1788,6 +1791,7 @@ void get_environment_sensor() {
     }
    break;
   }
+  Serial.println(String(no_atmos));
 }
 
 
@@ -1987,6 +1991,22 @@ void send_cloud() {
     json_state.set("iT_aux", double(dry_bulb_temp_aux), 1);
     json_state.set("WS", double(wind_speed), 2);
     json_state.FirebaseJson::set("WD", int(wind_deg));
+    json_state.FirebaseJson::set("OP_TIME", int(millis() / 1000));
+    Serial.println("Entro al bucle");
+  }else{
+      json_state.set("dT", 0, 2);
+    json_state.set("dT_raw", 0, 2);
+    json_state.set("BP", 0, 2);
+    json_state.set("RH", 0, 2);
+    json_state.set("RH_aux", 0, 1);
+    json_state.FirebaseJson::set("AL", 0);
+    json_state.set("BV", double(battery_voltage), 3);
+    json_state.set("SV", double(solar_voltage), 2);
+    json_state.set("iT", double(internal_temperature), 1);
+    json_state.set("iT_raw", 0, 1);
+    json_state.set("iT_aux", 0, 1);
+    json_state.set("WS", 0, 2);
+    json_state.FirebaseJson::set("WD", 0);
     json_state.FirebaseJson::set("OP_TIME", int(millis() / 1000));
 
   }
@@ -3176,6 +3196,7 @@ void FORCED_RESET_TASK(){
 }
 
 void deepsleep(int time2sleep) {
+  if (Start_or_Restart && prg_iteration==9 ) time2sleep=1;
   esp_sleep_enable_timer_wakeup(time2sleep * uS_TO_S_FACTOR);
   Serial.println("Going to sleep for " + String(time2sleep) + " Seconds");
   Serial.println();

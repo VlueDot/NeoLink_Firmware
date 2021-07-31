@@ -340,11 +340,8 @@ RTC_DATA_ATTR int8_t SENSOR_P2 = 0;
 RTC_DATA_ATTR int8_t SENSOR_P3 = 0;
 RTC_DATA_ATTR int8_t SENSOR_P4 = 0;
 //-------------------- LoRa communication variables------------------------
-RTC_DATA_ATTR byte local_adress=0x00;
-RTC_DATA_ATTR byte NN_adress[4]={0,0,0,0};
-RTC_DATA_ATTR int NN_AVAIBLE[]={0,0,0,0};
-RTC_DATA_ATTR int n_NN=0;
-RTC_DATA_ATTR byte localAddress;
+RTC_DATA_ATTR int NN_FLAG=1;
+RTC_DATA_ATTR int LA_FLAG=1;
 //-------------------------------------------------------------------------
 RTC_DATA_ATTR int DEPTH1;
 RTC_DATA_ATTR int DEPTH2;
@@ -454,7 +451,7 @@ void read_OpenWeather();
 void get_environment_sensor();
 
 void get_neolink_status();
-
+void get_LA();
 
 void compatibility_error();
 void FORCED_RESET_TASK();
@@ -500,7 +497,7 @@ void setup()
   ArdSerial.begin(57600);
   Serial.begin(115200);
 
-  EEPROM.begin(11);
+  EEPROM.begin(16);
 
   String sn_temporal = "XX0000-0000";
   for (int i = 0; i < 11; i++)
@@ -580,16 +577,14 @@ void setup()
 
     if (is_registered)
     {
-      if (!FIRMWARE_MODE == 'DEV2.2')
-      {
+      Serial.println("Entro al bool");
         check_configuration();
         get_ports_sensor();
         get_environment_sensor(); //BME
-      }
+        get_neolink_status(); //solar, internal temp
+        send_cloud();
 
-      get_neolink_status(); //solar, internal temp
-      send_cloud();
-      //if (MODE_PRG)  start_MODE_PRG = millis();
+     
     }
   }
 }
@@ -604,7 +599,9 @@ void loop()
     deepsleep(1);
   }
   //if (start_MODE_PRG - millis() >=300000) deepsleep(1);
-  deepsleep(1);
+  WiFi.disconnect(true);
+  WiFi.mode(WIFI_OFF);
+  deepsleep(5);
 }
 
 //---------------------------------------------------------
@@ -617,7 +614,7 @@ void check_first_WiFi()
 
 int checking_battery()
 {
-  if (FIRMWARE_MODE == 'DEV' || FIRMWARE_MODE == 'DEV2.2' || FIRMWARE_MODE == 'DEV2.1')
+  if (FIRMWARE_MODE == 'DEV' || FIRMWARE_MODE == 'DEV2.2' || FIRMWARE_MODE == 'DEV2.1'|| FIRMWARE_MODE == 'DEV3')
     return 1;
   Serial.println("Checking Battery.. ");
   pinMode(BAT_VALUE, INPUT_PULLDOWN);
@@ -933,10 +930,38 @@ int16_t setting_wifi()
 
 void check_configuration()
 {
-
+  
   Firebase.begin(FIREBASE_HOST, FIREBASE_AUTH);
   Firebase.reconnectWiFi(true);
+  Serial.println("Reading Neonode associated");
+  String NN_SN="";
+  int addrees=0;
+ 
+  if(NN_FLAG){
+      for(int i=0;i<4;i++){
+      Firebase.getString(firebasedata,"OLDneolinks/" + SN + "/neonode/"+String(i));
+      NN_SN=firebasedata.stringData();
+      if(NN_SN[0]=="N"&& NN_SN[1]=="N"){
+      Firebase.getInt(firebasedata,DEVICE +"/"+SN+"/"+ PATH_CONFIGURATION_VALUES +"Neonodo/"+NN_SN);
+      addrees=firebasedata.intData();
+      EEPROM.write(SN.length()+1+i,addrees);
+      EEPROM.commit();
+      }else{
+      EEPROM.write(SN.length()+1+i, 0);
+      EEPROM.commit();
+      }    
+  }
+  NN_FLAG=0;
+  }
+  if(LA_FLAG){
+    Firebase.getInt(firebasedata,DEVICE +"/"+SN+"/"+ PATH_CONFIGURATION_VALUES+"LA");
+    int LA=firebasedata.intData();
+    EEPROM.write(15,LA);
+    EEPROM.commit;
+    LA_FLAG=0;
+  }
 
+  
   if (Start_or_Restart || UNNECESARY_MEASURE)
   {
     Serial.println("Reading new configuration due restart or first run.");
@@ -963,27 +988,31 @@ void check_configuration()
 
     //Firebase.getInt(firebasedata,  DEVICE + PATH_CONFIGURATION_VALUES + String("GPS_RQ"));
     //GPS_RQ = firebasedata.intData();
-
-    Firebase.getFloat(firebasedata, DEVICE + PATH_CONFIGURATION_VALUES + "NO_WIFI");
+    Firebase.getInt(firebasedata,"OLDneolinks/" + SN + "/neonode/NN_FLAG");
+    NN_FLAG=firebasedata.intData();
+    Serial.println(String(NN_FLAG));
+    Firebase.getInt(firebasedata,DEVICE +"/"+SN+"/"+ PATH_CONFIGURATION_VALUES+"LA_FLAG");
+    LA_FLAG=firebasedata.intData();
+    Firebase.getFloat(firebasedata, DEVICE +"/"+SN+"/"+ PATH_CONFIGURATION_VALUES+ "NO_WIFI");
     NO_WIFI = firebasedata.floatData();
     Serial.print("\n NO_WIFI: " + String(NO_WIFI));
 
     if (!half_conf_flag)
     {
 
-      Firebase.getFloat(firebasedata, DEVICE + PATH_CONFIGURATION_VALUES + "N_END_HOUR");
+      Firebase.getFloat(firebasedata, DEVICE +"/"+SN+"/"+ PATH_CONFIGURATION_VALUES+ "N_END_HOUR");
       N_END_HOUR = firebasedata.floatData();
       Serial.print("\n N_END_HOUR: " + String(N_END_HOUR));
 
-      Firebase.getFloat(firebasedata, DEVICE + PATH_CONFIGURATION_VALUES + "N_SLEEP_TIME");
+      Firebase.getFloat(firebasedata, DEVICE +"/"+SN+"/"+ PATH_CONFIGURATION_VALUES + "N_SLEEP_TIME");
       N_SLEEP_TIME = firebasedata.floatData();
       Serial.print("\n N_SLEEP_TIME: " + String(N_SLEEP_TIME));
 
-      Firebase.getFloat(firebasedata, DEVICE + PATH_CONFIGURATION_VALUES + "N_START_HOUR");
+      Firebase.getFloat(firebasedata, DEVICE +"/"+SN+"/"+ PATH_CONFIGURATION_VALUES + "N_START_HOUR");
       N_START_HOUR = firebasedata.floatData();
       Serial.print("\n N_START_HOUR: " + String(N_START_HOUR));
 
-      Firebase.getFloat(firebasedata, DEVICE + PATH_CONFIGURATION_VALUES + "SLEEP_TIME");
+      Firebase.getFloat(firebasedata, DEVICE +"/"+SN+"/"+ PATH_CONFIGURATION_VALUES + "SLEEP_TIME");
       SLEEP_TIME = firebasedata.floatData();
       Serial.print("\n SLEEP_TIME: " + String(SLEEP_TIME));
     }
@@ -991,34 +1020,34 @@ void check_configuration()
     else
       Serial.print("\n SLEEP_TIME parameters already read.");
 
-    Firebase.getInt(firebasedata, DEVICE + PATH_CONFIGURATION_VALUES + "PORT_RQ");
+    Firebase.getInt(firebasedata, DEVICE +"/"+SN+"/"+ PATH_CONFIGURATION_VALUES + "PORT_RQ");
     PORT_RQ = firebasedata.intData();
     Serial.print("\n PORT_RQ: " + String(PORT_RQ));
     delay(100);
 
     depth_request();
 
-    Firebase.getInt(firebasedata, DEVICE + PATH_CONFIGURATION_VALUES + "OBSERVER");
+    Firebase.getInt(firebasedata, DEVICE +"/"+SN+"/"+ PATH_CONFIGURATION_VALUES + "OBSERVER");
     OBSERVER = firebasedata.intData();
     Serial.print("\n OBSERVER: " + String(OBSERVER));
     delay(100);
 
-    Firebase.getInt(firebasedata, DEVICE + PATH_CONFIGURATION_VALUES + "SENSOR/P1");
+    Firebase.getInt(firebasedata, DEVICE +"/"+SN+"/"+ PATH_CONFIGURATION_VALUES+ "SENSOR/P1");
     SENSOR_P1 = firebasedata.intData();
     Serial.print("\n SENSOR P1: " + String(SENSOR_P1));
     delay(100);
 
-    Firebase.getInt(firebasedata, DEVICE + PATH_CONFIGURATION_VALUES + "SENSOR/P2");
+    Firebase.getInt(firebasedata, DEVICE +"/"+SN+"/"+ PATH_CONFIGURATION_VALUES+ "SENSOR/P2");
     SENSOR_P2 = firebasedata.intData();
     Serial.print("\n SENSOR P2: " + String(SENSOR_P2));
     delay(100);
 
-    Firebase.getInt(firebasedata, DEVICE + PATH_CONFIGURATION_VALUES + "SENSOR/P3");
+    Firebase.getInt(firebasedata, DEVICE +"/"+SN+"/"+ PATH_CONFIGURATION_VALUES + "SENSOR/P3");
     SENSOR_P3 = firebasedata.intData();
     Serial.print("\n SENSOR P3: " + String(SENSOR_P3));
     delay(100);
 
-    Firebase.getInt(firebasedata, DEVICE + PATH_CONFIGURATION_VALUES + "SENSOR/P4");
+    Firebase.getInt(firebasedata, DEVICE +"/"+SN+"/"+ PATH_CONFIGURATION_VALUES+ "SENSOR/P4");
     SENSOR_P4 = firebasedata.intData();
     Serial.print("\n SENSOR P4: " + String(SENSOR_P4));
     delay(100);
@@ -1104,11 +1133,11 @@ void get_ports_sensor()
 
       Serial.println(String(message));
     */
-    message=getValue(message,'$',0);
-    port1_msg = getValue(message, '%', 1);
-    port2_msg = getValue(message, '%', 2);
-    port3_msg = getValue(message, '%', 3);
-    port4_msg = getValue(message, '%', 4);
+    String message_st=getValue(message,'$',0);
+    port1_msg = getValue(message_st, '%', 1);
+    port2_msg = getValue(message_st, '%', 2);
+    port3_msg = getValue(message_st, '%', 3);
+    port4_msg = getValue(message_st, '%', 4);
 
     Serial.println(port1_msg);
     Serial.println(port2_msg);
@@ -1122,41 +1151,29 @@ void get_ports_sensor()
 
     */
 
-    Serial.println("--------------------------- PORT 1 -----------------------------");
+Serial.println("--------------------------- PORT 1 -----------------------------");
 
     port1_msg_len = port1_msg.length();
 
-    if (port1_msg_len > 0)
-    {
+    if (port1_msg_len > 0 ) {
       int8_t n_samples = 0;
-      int8_t n_var_init = 0;
-      for (int i = 0; i <= port1_msg_len; i++)
-      {
-        if (port1_msg[i] == '_')
-        {
-          n_samples++;
-        }
+      int8_t n_var_init=0;
+      for (int i = 0; i <= port1_msg_len ; i++) {
+        if (port1_msg[i] == '_') n_samples++;
+        if (port1_msg[i] == ' ') n_var_init++;
       }
-      for (int i = 0; i <= port1_msg_len; i++)
-      {
-        if (port1_msg[i] == ' ')
-        {
-          n_var_init++;
-        }
+      if(n_samples>0){
+      int8_t n_var=n_var_init/(n_samples-1)+1;
+      String P1_to_transform=getValue(port1_msg,'_',0);
+      for(int i=0; i<n_var;i++){
+        average=0;
+         for(int j=1;j<=n_samples-1;j++){
+          average=average+getValue(getValue(port1_msg,'_',j),' ',i).toFloat();
+         }
+         average=average/(n_samples-1);
+         P1_to_transform=P1_to_transform+":"+"V"+String(i+1)+":"+String(average);
       }
-      int8_t n_var = n_var_init / (n_samples - 1) + 1;
-      String P1_to_transform = getValue(port1_msg, '_', 0);
-      for (int i = 0; i < n_var; i++)
-      {
-        average = 0;
-        for (int j = 1; j <= n_samples - 1; j++)
-        {
-          average = average + getValue(getValue(port1_msg, '_', j), ' ', i).toFloat();
-        }
-        average = average / (n_samples - 1);
-        P1_to_transform = P1_to_transform + ":" + "V" + String(i + 1) + ":" + String(average);
-      }
-      P1_to_transform = P1_to_transform + ":" + getValue(port1_msg, '_', n_samples);
+      P1_to_transform=P1_to_transform+":"+getValue(port1_msg,'_',n_samples);
       Serial.println(P1_to_transform);
 
       /*port1_sample1 = port1_msg.substring(0, sample_div[0]);
@@ -1177,181 +1194,151 @@ void get_ports_sensor()
 
       //Serial.println("n_samples: " + String(n_samples));
 
+
+
       //Serial.println(port1_sample1);
       //Serial.println(port1_sample2);
       //Serial.println(port1_sample3);
-      Serial.println(getValue(port1_msg, '_', n_samples));
-      message_Json_port1 = Transform_Variables(P1_to_transform, n_var, Port1_Active);
-    }
-    else
-    {
+      Serial.println(getValue(port1_msg,'_',n_samples));
+      message_Json_port1=Transform_Variables(P1_to_transform,n_var,Port1_Active);
+    }else {
       Port1_Active = 0;
       Serial.print("Port1_Active ");
       Serial.println(Port1_Active);
     }
+    }
+
+    
     Serial.println(message_Json_port1);
 
     //--------------------------------PORT2-----------------------------------------------
-    port2_msg_len = port2_msg.length();
+    Serial.println("--------------------------- PORT 2 -----------------------------");
+   port2_msg_len = port2_msg.length();
 
-    if (port2_msg_len > 0)
-    {
+    if (port2_msg_len > 0 ) {
       int8_t n_samples = 0;
-      int8_t n_var_init = 0;
-      for (int i = 0; i <= port2_msg_len; i++)
-      {
-        if (port2_msg[i] == '_')
-        {
-          n_samples++;
-        }
+      int8_t n_var_init=0;
+      for (int i = 0; i <= port2_msg_len ; i++) {
+        if (port2_msg[i] == '_') n_samples++;
+         if (port2_msg[i] == ' ')n_var_init++;
       }
-      for (int i = 0; i <= port2_msg_len; i++)
-      {
-        if (port2_msg[i] == ' ')
-        {
-          n_var_init++;
-        }
+      if(n_samples>0){
+      int8_t n_var=n_var_init/(n_samples-1)+1;
+      String P2_to_transform=getValue(port2_msg,'_',0);
+      for(int i=0; i<n_var;i++){
+        average=0;
+         for(int j=1;j<=n_samples-1;j++){
+          average=average+getValue(getValue(port2_msg,'_',j),' ',i).toFloat();
+         }
+         average=average/(n_samples-1);
+         P2_to_transform=P2_to_transform+":"+"V"+String(i+1)+":"+String(average);
       }
-      int8_t n_var = n_var_init / (n_samples - 1) + 1;
-      String P2_to_transform = getValue(port2_msg, '_', 0);
-      for (int i = 0; i < n_var; i++)
-      {
-        average = 0;
-        for (int j = 1; j <= n_samples - 1; j++)
-        {
-          average = average + getValue(getValue(port2_msg, '_', j), ' ', i).toFloat();
-        }
-        average = average / (n_samples - 1);
-        P2_to_transform = P2_to_transform + ":" + "V" + String(i + 1) + ":" + String(average);
-      }
-      P2_to_transform = P2_to_transform + ":" + getValue(port2_msg, '_', n_samples);
+      P2_to_transform=P2_to_transform+":"+getValue(port2_msg,'_',n_samples);
       Serial.println(P2_to_transform);
 
       Port2_Active = 1;
       Serial.print("Port2_Active ");
       Serial.println(Port2_Active);
 
-      Serial.println(getValue(port2_msg, '_', n_samples));
-      message_Json_port2 = Transform_Variables(P2_to_transform, n_var, Port2_Active);
-    }
-    else
-    {
+
+      Serial.println(getValue(port2_msg,'_',n_samples));
+      message_Json_port2=Transform_Variables(P2_to_transform,n_var,Port2_Active);
+    } else {
       Port2_Active = 0;
       Serial.print("Port2_Active ");
       Serial.println(Port2_Active);
     }
+    }
+   
     Serial.println(message_Json_port2);
 
     //--------------------------------PORT3-----------------------------------------------
     Serial.println("--------------------------- PORT 3 -----------------------------");
 
     port3_msg_len = port3_msg.length();
-    if (port3_msg_len > 0)
-    {
+    if (port3_msg_len > 0 ) {
       int8_t n_samples = 0;
-      int8_t n_var_init = 0;
-      for (int i = 0; i <= port3_msg_len; i++)
-      {
-        if (port3_msg[i] == '_')
-        {
-          n_samples++;
-        }
+      int8_t n_var_init=0;
+      for (int i = 0; i <= port3_msg_len ; i++) {
+        if (port3_msg[i] == '_') n_samples++;
+        if (port3_msg[i] == ' ') n_var_init++;
       }
-      for (int i = 0; i <= port3_msg_len; i++)
-      {
-        if (port3_msg[i] == ' ')
-        {
-          n_var_init++;
-        }
+      if(n_samples>0){
+      int8_t n_var=n_var_init/(n_samples-1)+1;
+      String P3_to_transform=getValue(port3_msg,'_',0);
+      for(int i=0; i<n_var;i++){
+        average=0;
+         for(int j=1;j<=n_samples-1;j++){
+          average=average+getValue(getValue(port3_msg,'_',j),' ',i).toFloat();
+         }
+         average=average/(n_samples-1);
+         P3_to_transform=P3_to_transform+":"+"V"+String(i+1)+":"+String(average);
       }
-      int8_t n_var = n_var_init / (n_samples - 1) + 1;
-      String P3_to_transform = getValue(port3_msg, '_', 0);
-      for (int i = 0; i < n_var; i++)
-      {
-        average = 0;
-        for (int j = 1; j <= n_samples - 1; j++)
-        {
-          average = average + getValue(getValue(port3_msg, '_', j), ' ', i).toFloat();
-        }
-        average = average / (n_samples - 1);
-        P3_to_transform = P3_to_transform + ":" + "V" + String(i + 1) + ":" + String(average);
-      }
-      P3_to_transform = P3_to_transform + ":" + getValue(port3_msg, '_', n_samples);
+      P3_to_transform=P3_to_transform+":"+getValue(port3_msg,'_',n_samples);
       Serial.println(P3_to_transform);
 
       Port3_Active = 1;
       Serial.print("Port3_Active ");
       Serial.println(Port3_Active);
 
-      Serial.println(getValue(port3_msg, '_', n_samples));
-      message_Json_port3 = Transform_Variables(P3_to_transform, n_var, Port3_Active);
-    }
-    else
-    {
+
+      Serial.println(getValue(port3_msg,'_',n_samples));
+      message_Json_port3=Transform_Variables(P3_to_transform,n_var,Port3_Active);
+    } else {
       Port3_Active = 0;
       Serial.print("Port3_Active ");
       Serial.println(Port3_Active);
     }
+    }
+   
     Serial.println(message_Json_port3);
 
     //--------------------------------PORT4-----------------------------------------------
     Serial.println("--------------------------- PORT 4 -----------------------------");
 
     port4_msg_len = port4_msg.length();
-    if (port4_msg_len > 0)
-    {
+    if (port4_msg_len > 0) {
       int8_t n_samples = 0;
-      int8_t n_var_init = 0;
-      for (int i = 0; i <= port4_msg_len; i++)
-      {
-        if (port4_msg[i] == '_')
-        {
-          n_samples++;
-        }
+      int8_t n_var_init=0;
+      for (int i = 0; i <= port4_msg_len ; i++) {
+        if (port4_msg[i] == '_') n_samples++;
+        if (port4_msg[i] == ' ') n_var_init++;
       }
-      for (int i = 0; i <= port4_msg_len; i++)
-      {
-        if (port4_msg[i] == ' ')
-        {
-          n_var_init++;
-        }
+      if(n_samples>0){
+      int8_t n_var=n_var_init/(n_samples-1)+1;
+      String P4_to_transform=getValue(port4_msg,'_',0);
+      for(int i=0; i<n_var;i++){
+        average=0;
+         for(int j=1;j<=n_samples-1;j++){
+          average=average+getValue(getValue(port4_msg,'_',j),' ',i).toFloat();
+         }
+         average=average/(n_samples-1);
+         P4_to_transform=P4_to_transform+":"+"V"+String(i+1)+":"+String(average);
       }
-      int8_t n_var = n_var_init / (n_samples - 1) + 1;
-      String P4_to_transform = getValue(port4_msg, '_', 0);
-      for (int i = 0; i < n_var; i++)
-      {
-        average = 0;
-        for (int j = 1; j <= n_samples - 1; j++)
-        {
-          average = average + getValue(getValue(port4_msg, '_', j), ' ', i).toFloat();
-        }
-        average = average / (n_samples - 1);
-        P4_to_transform = P4_to_transform + ":" + "V" + String(i + 1) + ":" + String(average);
-      }
-      P4_to_transform = P4_to_transform + ":" + getValue(port4_msg, '_', n_samples);
+      P4_to_transform=P4_to_transform+":"+getValue(port4_msg,'_',n_samples);
       Serial.println(P4_to_transform);
 
       Port4_Active = 1;
       Serial.print("Port4_Active ");
       Serial.println(Port4_Active);
 
-      Serial.println(getValue(port4_msg, '_', n_samples));
-      message_Json_port4 = Transform_Variables(P4_to_transform, n_var, Port4_Active);
-    }
-    else
-    {
+
+      Serial.println(getValue(port4_msg,'_',n_samples));
+      message_Json_port4=Transform_Variables(P4_to_transform,n_var,Port4_Active);
+    } else {
       Port4_Active = 0;
       Serial.print("Port4_Active ");
       Serial.println(Port4_Active);
     }
+    }
+   
     Serial.println(message_Json_port4);
 
     //-------------------------------------------------------------------------------
     Serial.println("--------------------------- END PORT -----------------------------");
-  }
-  else
-    Serial.println("No Port sensing  request.");
-  Serial.println();
+}
+ else Serial.println("No Port sensing  request.");
+
 }
 //------------------------------------------------------------------
 
@@ -1520,8 +1507,7 @@ void get_gps()
     int8_t ack_gps_try = 1;
     int8_t data = 0;
 
-    while (1)
-    {
+    while (1){
       if (ArdSerial.available())
       {
 
@@ -1604,8 +1590,7 @@ void get_gps()
       }
     }
   }
-  else
-    Serial.println("No GPS request.");
+  else Serial.println("No GPS request.");
 }
 
 //------------------------------------------------------------------
@@ -1770,8 +1755,7 @@ void get_environment_sensor()
         no_atmos = 1;
         if (rep_atm > 15)
         {
-          if (relative_humidity_past != 0)
-            relative_humidity = relative_humidity_past;
+          if (relative_humidity_past != 0) relative_humidity = relative_humidity_past;
           break;
         }
       }
@@ -2714,6 +2698,9 @@ void NodeExistance()
     else
       Serial.println("Nodes already exist.");
   }
+
+else Serial.println ("No WiFi Connection detected.");
+
 }
 
 /*
@@ -3105,7 +3092,7 @@ void sendMessage(String outgoing,int destination)
 {
   LoRa.beginPacket();            // start packet
   LoRa.write(destination);       // add Neolink address
-  LoRa.write(localAddress);      // add Neonode address
+  LoRa.write(local_address);      // add Neonode address
   LoRa.write(msgCount);          // add message ID
   LoRa.write(outgoing.length()); // add message length
   LoRa.print(outgoing);          // add message
@@ -3138,7 +3125,7 @@ String onReceive(int packetSize)
   }
 
   // if the recipient isn't this device or broadcast,
-  if (recipient != localAddress && recipient != 0xFF)
+  if (recipient != local_address && recipient != 0xFF)
   {
     Serial.println("This message is not for me.");
     return ""; // skip rest of function
@@ -3215,12 +3202,12 @@ bool Comparator_msg(String msg1, String msg2)
   msg2.toCharArray(msgb, length2 + 1);
   if (strcmp(msga, msgb) == 0)
   {
-    Serial.print("iguales");
+    //Serial.print("iguales");
     return false;
   }
   else
   {
-    Serial.println("diferentes");
+    //Serial.println("diferentes");
     return true;
   }
 }
@@ -3239,7 +3226,7 @@ bool Comparator(String msg)
     return true;
   }
 }
-void LoRa_Communication()
+void LoRa_Communication(int destination)
 {
   long start = millis();
   config_LoRa();
@@ -3252,34 +3239,33 @@ void LoRa_Communication()
   delay(500);
   while (millis() - start_time <= 1000)
   {
-    sendMessage(message);
+    sendMessage(message,destination);
     Serial.println(message);
     Serial.println(packetsize);
   }
   sms = reciveBig();
   Serial.println(sms);
   Transform_NN_variables(sms);
-  sendDeepSleep();
+  int16_t deep_sleep_nn=real_sleep_time();
+  sendMessage(String(deep_sleep_nn,destination));
 }
-void sendDeepSleep()
+/*void sendDeepSleep(int destination)
 {
   int16_t sleep_timee;
   if (actual_hour > N_END_HOUR && actual_hour < N_START_HOUR)
   {
     sleep_timee = int(SLEEP_TIME) - (actual_min * 60 + actual_secs) % int(SLEEP_TIME) - (millis()) / 1000;
-    if (sleep_timee <= 0)
-      sleep_timee = sleep_timee + int(SLEEP_TIME);
+    if (sleep_timee <= 0) sleep_timee = sleep_timee + int(SLEEP_TIME);
   }
   else
   {
     Serial.println("N_SLEEP_TIME set.");
     sleep_timee = int(N_SLEEP_TIME) - (actual_min * 60 + actual_secs) % int(N_SLEEP_TIME) - (millis()) / 1000;
-    if (sleep_timee <= 0)
-      sleep_timee = sleep_timee + int(N_SLEEP_TIME);
+    if (sleep_timee <= 0) sleep_timee = sleep_timee + int(N_SLEEP_TIME);
   }
   SLEEP_TIME_modem = sleep_timee - SLEEP_TIME_PRE + 10;
-  sendMessage(String(SLEEP_TIME_modem));
-}
+  sendMessage(String(SLEEP_TIME_modem),destination);
+}*/
 String Transform_Variables(String msg, int n_var, int Port_Active)
 {
 
@@ -3313,19 +3299,15 @@ String Transform_Variables(String msg, int n_var, int Port_Active)
       //valor[3]=P_water_pore_cond;
       const float perm_aparent_water = 4.1;
       valor[0] = 3.879 * datos[0] / 10000 - 0.6956;
-      if (valor[0] < 0)
-        valor[0] = 0;
+      if (valor[0] < 0) valor[0] = 0;
       //APPARENT DIELECTRIC PERMITTIVITY
       valor[1] = pow((2.887e-9 * pow(datos[0], 3) - 2.08e-5 * pow(datos[0], 2) + 5.276e-2 * datos[0] - 43.39), 2);
       //Real portion of Dielectric permittivity of the soil pore water
       valor[2] = 80.3 - 0.37 * (datos[1] - 20);
       //pore water EC (dS/m)
-      if (valor[0] >= 0.05)
-        valor[3] = (valor[2] * datos[2] / (valor[1] - perm_aparent_water)) * 10e-3;
-      else
-        valor[3] = 0;
-      if (valor[3] < 0)
-        valor[3] = 0;
+      if (valor[0] >= 0.05) valor[3] = (valor[2] * datos[2] / (valor[1] - perm_aparent_water)) * 10e-3;
+      else valor[3] = 0;
+      if (valor[3] < 0) valor[3] = 0;
 
       //Serial.println("RAW: "+ String(datos[0],2));
       for (int i = 0; i < n_var; i++)
@@ -3348,21 +3330,42 @@ String Transform_Variables(String msg, int n_var, int Port_Active)
       msg_Json = msg_Json + "_" + getValue(msg, ':', 2 * n_var + 1);
     }
   }
-  else
-    msg_Json = "NaN";
+  else msg_Json = "NaN";
   return msg_Json;
 }
 
 void check_neonodes(){
-  if (WiFi.status() != WL_CONNECTED)
-      starting_wifi();
+  if (WiFi.status() != WL_CONNECTED) starting_wifi();
 
     if (WiFi.status() == WL_CONNECTED)
-    {
+    {  
+       get_LA();
+       int NN_update=0;
+       Firebase.getInt(firebasedata, DEVICE + PATH_CONFIGURATION_VALUES + "Neonodo/UPDATE");
+       NN_update= firebasedata.intData();
+       if(NN_update){
       String NN_SN="";
       for(int i=0;i<4;i++){
-      NN_SN=Firebase.getString(firebasedata,"OLDneolinks/"+SN+"/neonodos/"+String(i));
-      NN_SN=NN_SN+"_";
+      Firebase.getString(firebasedata,"OLDneolinks/"+SN+"/neonodos/"+String(i));
+      NN_SN=firebasedata.stringData()+"_";
+      }
+      String nn_address;
+      for(int i=0;i<4;i++){
+        Firebase.getString(firebasedata,DEVICE +PATH_CONFIGURATION_VALUES+"Neonodo/"+getValue(NN_SN,"_",i));
+        nn_address=nn_address+firebasedata.stringData()+"_";
+      }
+      for(int i=0;i<nn_address.lenght();i++){
+        EEPROM.write(i, nn_address[i]);
+        EEPROM.commit();
+      }
     }
+    String mensaje="";
+    for(int i=11;i<50,i++){
+     memsaje=mensaje +(char)EEPROM.read(i);
     }
+
+    }
+}
+void NN_connection(){
+  
 }

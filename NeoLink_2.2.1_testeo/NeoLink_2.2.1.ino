@@ -1278,7 +1278,7 @@ void get_ports_sensor() {
     Serial.println(message_Json_port1);
 
     //--------------------------------PORT2-----------------------------------------------
-    Serial.println("--------------------------- PORT 2 -----------------------------")
+    Serial.println("--------------------------- PORT 2 -----------------------------");
    port2_msg_len = port2_msg.length();
 
     if (port2_msg_len > 0 ) {
@@ -2000,6 +2000,22 @@ void send_cloud() {
     json_state.set("iT_aux", double(dry_bulb_temp_aux), 1);
     json_state.set("WS", double(wind_speed), 2);
     json_state.FirebaseJson::set("WD", int(wind_deg));
+    json_state.FirebaseJson::set("OP_TIME", int(millis() / 1000));
+
+  }else{
+      json_state.set("dT", double(0), 2);
+    json_state.set("dT_raw", double(0), 2);
+    json_state.set("BP", double(0), 2);
+    json_state.set("RH", double(0), 2);
+    json_state.set("RH_aux", double(0), 1);
+    json_state.FirebaseJson::set("AL", int(0));
+    json_state.set("BV", double(battery_voltage), 3);
+    json_state.set("SV", double(solar_voltage), 2);
+    json_state.set("iT", double(internal_temperature), 1);
+    json_state.set("iT_raw", double(0), 1);
+    json_state.set("iT_aux", double(0), 1);
+    json_state.set("WS", double(0), 2);
+    json_state.FirebaseJson::set("WD", int(0));
     json_state.FirebaseJson::set("OP_TIME", int(millis() / 1000));
 
   }
