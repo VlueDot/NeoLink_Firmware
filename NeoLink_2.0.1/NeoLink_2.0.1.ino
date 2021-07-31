@@ -59,7 +59,7 @@ const String FIRMWARE_VER = "2.0.0";
 //const double BUILT = 552;
 const char* HARDWARE_VER = "2";
 
-#define FIRMWARE_MODE 'DEV'
+#define FIRMWARE_MODE 'PRO'
 
 #if FIRMWARE_MODE == 'PRO'
   #define FIREBASE_HOST "https://neolink-934b4.firebaseio.com"
@@ -69,12 +69,9 @@ const char* HARDWARE_VER = "2";
   const String WIFI_PSSWD_DEFAULT = "123456789a";
 
 #elif FIRMWARE_MODE == 'DEV'
- #define FIREBASE_HOST "https://neolink-934b4.firebaseio.com"
-  #define FIREBASE_AUTH "IroB3fdbcPb9vxPlJKDJcqmfJgs0KouJGe0sUBKN"
-  #define UPDATE_JSON_URL  "https://firmware-neolink.s3-sa-east-1.amazonaws.com/firmware_pro.json"
-  /*#define FIREBASE_HOST "https://neolink-b2f81-default-rtdb.firebaseio.com"
+  #define FIREBASE_HOST "https://neolink-b2f81-default-rtdb.firebaseio.com"
   #define FIREBASE_AUTH "P2aDr6F6P1XZQ3zc7k4ABuPBT9o5szLwFHphsqZt"
-  #define UPDATE_JSON_URL  "https://test-firmware-neolink.s3.us-east-2.amazonaws.com/firmware_dev.json"*/
+  #define UPDATE_JSON_URL  "https://test-firmware-neolink.s3.us-east-2.amazonaws.com/firmware_dev.json"
   const String WIFI_SSID_DEFAULT = "LINUX1";
   const String WIFI_PSSWD_DEFAULT = "123456789abc";
 

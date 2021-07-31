@@ -942,7 +942,7 @@ void check_configuration()
       Firebase.getString(firebasedata,"OLDneolinks/" + SN + "/neonode/"+String(i));
       NN_SN=firebasedata.stringData();
       if(NN_SN[0]=="N"&& NN_SN[1]=="N"){
-      Firebase.getInt(firebasedata,DEVICE +"/"+SN+"/"+ PATH_CONFIGURATION_VALUES +"Neonodo/"+NN_SN);
+      Firebase.getInt(firebasedata,DEVICE + PATH_CONFIGURATION_VALUES +"Neonodo/"+NN_SN);
       addrees=firebasedata.intData();
       EEPROM.write(SN.length()+1+i,addrees);
       EEPROM.commit();
@@ -954,7 +954,7 @@ void check_configuration()
   NN_FLAG=0;
   }
   if(LA_FLAG){
-    Firebase.getInt(firebasedata,DEVICE +"/"+SN+"/"+ PATH_CONFIGURATION_VALUES+"LA");
+    Firebase.getInt(firebasedata,DEVICE + PATH_CONFIGURATION_VALUES+"LA");
     int LA=firebasedata.intData();
     EEPROM.write(15,LA);
     EEPROM.commit;
@@ -991,28 +991,28 @@ void check_configuration()
     Firebase.getInt(firebasedata,"OLDneolinks/" + SN + "/neonode/NN_FLAG");
     NN_FLAG=firebasedata.intData();
     Serial.println(String(NN_FLAG));
-    Firebase.getInt(firebasedata,DEVICE +"/"+SN+"/"+ PATH_CONFIGURATION_VALUES+"LA_FLAG");
+    Firebase.getInt(firebasedata,DEVICE + PATH_CONFIGURATION_VALUES+"LA_FLAG");
     LA_FLAG=firebasedata.intData();
-    Firebase.getFloat(firebasedata, DEVICE +"/"+SN+"/"+ PATH_CONFIGURATION_VALUES+ "NO_WIFI");
+    Firebase.getFloat(firebasedata, DEVICE + PATH_CONFIGURATION_VALUES+ "NO_WIFI");
     NO_WIFI = firebasedata.floatData();
     Serial.print("\n NO_WIFI: " + String(NO_WIFI));
 
     if (!half_conf_flag)
     {
 
-      Firebase.getFloat(firebasedata, DEVICE +"/"+SN+"/"+ PATH_CONFIGURATION_VALUES+ "N_END_HOUR");
+      Firebase.getFloat(firebasedata, DEVICE + PATH_CONFIGURATION_VALUES+ "N_END_HOUR");
       N_END_HOUR = firebasedata.floatData();
       Serial.print("\n N_END_HOUR: " + String(N_END_HOUR));
 
-      Firebase.getFloat(firebasedata, DEVICE +"/"+SN+"/"+ PATH_CONFIGURATION_VALUES + "N_SLEEP_TIME");
+      Firebase.getFloat(firebasedata, DEVICE + PATH_CONFIGURATION_VALUES + "N_SLEEP_TIME");
       N_SLEEP_TIME = firebasedata.floatData();
       Serial.print("\n N_SLEEP_TIME: " + String(N_SLEEP_TIME));
 
-      Firebase.getFloat(firebasedata, DEVICE +"/"+SN+"/"+ PATH_CONFIGURATION_VALUES + "N_START_HOUR");
+      Firebase.getFloat(firebasedata, DEVICE + PATH_CONFIGURATION_VALUES + "N_START_HOUR");
       N_START_HOUR = firebasedata.floatData();
       Serial.print("\n N_START_HOUR: " + String(N_START_HOUR));
 
-      Firebase.getFloat(firebasedata, DEVICE +"/"+SN+"/"+ PATH_CONFIGURATION_VALUES + "SLEEP_TIME");
+      Firebase.getFloat(firebasedata, DEVICE + PATH_CONFIGURATION_VALUES + "SLEEP_TIME");
       SLEEP_TIME = firebasedata.floatData();
       Serial.print("\n SLEEP_TIME: " + String(SLEEP_TIME));
     }
@@ -1020,34 +1020,34 @@ void check_configuration()
     else
       Serial.print("\n SLEEP_TIME parameters already read.");
 
-    Firebase.getInt(firebasedata, DEVICE +"/"+SN+"/"+ PATH_CONFIGURATION_VALUES + "PORT_RQ");
+    Firebase.getInt(firebasedata, DEVICE +PATH_CONFIGURATION_VALUES + "PORT_RQ");
     PORT_RQ = firebasedata.intData();
     Serial.print("\n PORT_RQ: " + String(PORT_RQ));
     delay(100);
 
     depth_request();
 
-    Firebase.getInt(firebasedata, DEVICE +"/"+SN+"/"+ PATH_CONFIGURATION_VALUES + "OBSERVER");
+    Firebase.getInt(firebasedata, DEVICE + PATH_CONFIGURATION_VALUES + "OBSERVER");
     OBSERVER = firebasedata.intData();
     Serial.print("\n OBSERVER: " + String(OBSERVER));
     delay(100);
 
-    Firebase.getInt(firebasedata, DEVICE +"/"+SN+"/"+ PATH_CONFIGURATION_VALUES+ "SENSOR/P1");
+    Firebase.getInt(firebasedata, DEVICE + PATH_CONFIGURATION_VALUES+ "SENSOR/P1");
     SENSOR_P1 = firebasedata.intData();
     Serial.print("\n SENSOR P1: " + String(SENSOR_P1));
     delay(100);
 
-    Firebase.getInt(firebasedata, DEVICE +"/"+SN+"/"+ PATH_CONFIGURATION_VALUES+ "SENSOR/P2");
+    Firebase.getInt(firebasedata, DEVICE+ PATH_CONFIGURATION_VALUES+ "SENSOR/P2");
     SENSOR_P2 = firebasedata.intData();
     Serial.print("\n SENSOR P2: " + String(SENSOR_P2));
     delay(100);
 
-    Firebase.getInt(firebasedata, DEVICE +"/"+SN+"/"+ PATH_CONFIGURATION_VALUES + "SENSOR/P3");
+    Firebase.getInt(firebasedata, DEVICE + PATH_CONFIGURATION_VALUES + "SENSOR/P3");
     SENSOR_P3 = firebasedata.intData();
     Serial.print("\n SENSOR P3: " + String(SENSOR_P3));
     delay(100);
 
-    Firebase.getInt(firebasedata, DEVICE +"/"+SN+"/"+ PATH_CONFIGURATION_VALUES+ "SENSOR/P4");
+    Firebase.getInt(firebasedata, DEVICE + PATH_CONFIGURATION_VALUES+ "SENSOR/P4");
     SENSOR_P4 = firebasedata.intData();
     Serial.print("\n SENSOR P4: " + String(SENSOR_P4));
     delay(100);
