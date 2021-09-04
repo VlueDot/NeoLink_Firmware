@@ -73,15 +73,17 @@ const char* HARDWARE_VER = "2.0";
   #define FIREBASE_HOST "https://neolink-b2f81-default-rtdb.firebaseio.com"
   #define FIREBASE_AUTH "P2aDr6F6P1XZQ3zc7k4ABuPBT9o5szLwFHphsqZt"
   #define UPDATE_JSON_URL  "https://test-firmware-neolink.s3.us-east-2.amazonaws.com/firmware_dev.json"
-  const String WIFI_SSID_DEFAULT = "LINUX1";
-  const String WIFI_PSSWD_DEFAULT = "123456789abc";  
+  const String WIFI_SSID_DEFAULT = "LINUX1";//Ernesto29-4G//HUAWEI-2.4G-3N8//LINUX1
+  const String WIFI_PSSWD_DEFAULT = "123456789abc";//Roco1234//KC88F3TN//123456789abc  
+  byte localAddress = 0xBB; //address of this device.
+  byte destination = 0x01; //destination to send to.
 
 #elif FIRMWARE_MODE == 'DEV2.2'
-  #define FIREBASE_HOST "https://neolink-934b4.firebaseio.com"
-  #define FIREBASE_AUTH "IroB3fdbcPb9vxPlJKDJcqmfJgs0KouJGe0sUBKN"
-  #define UPDATE_JSON_URL  "https://firmware-neolink.s3-sa-east-1.amazonaws.com/firmware_pro.json"
-  const String WIFI_SSID_DEFAULT = "LINUX1";
-  const String WIFI_PSSWD_DEFAULT = "123456789abc";
+  #define FIREBASE_HOST "https://neolink-b2f81-default-rtdb.firebaseio.com"
+  #define FIREBASE_AUTH "P2aDr6F6P1XZQ3zc7k4ABuPBT9o5szLwFHphsqZt"
+  #define UPDATE_JSON_URL  "https://test-firmware-neolink.s3.us-east-2.amazonaws.com/firmware_dev.json"
+  const String WIFI_SSID_DEFAULT = "HUAWEI-2.4G-3N8";
+  const String WIFI_PSSWD_DEFAULT = "KC88F3TN";
   byte localAddress = 0xBB; //address of this device.
   byte destination = 0x01; //destination to send to.
 
@@ -396,6 +398,7 @@ String message_Json_port1;
 String message_Json_port2;
 String message_Json_port3;
 String message_Json_port4;
+String sms_upload;
 
 /*
   RTC_DATA_ATTR int8_t day_in_mem=1;
@@ -461,6 +464,7 @@ void turn_modem_on();
 
 
 int16_t setting_wifi();
+void Upload(String message);
 void starting_wifi();
 void deepsleep_beep(int deepsleep_time, unsigned long beep_time);
 void get_LOCAL_SN();
@@ -470,8 +474,8 @@ void turn_modem_off();
 int16_t real_sleep_time();
 void check_registered();
 
-void depth_request();
-void check_configuration();
+void depth_request(String direc);
+void check_configuration(String direction);
 
 void moving_average_sensor();
 void get_ports_sensor();
@@ -490,8 +494,7 @@ void get_neonodes_signals();
 
 void compatibility_error();
 void FORCED_RESET_TASK();
-void send_cloud();
-void config_LoRa();
+void config_LoRa0();
 void sendMessage(String outgoing);
 String onReceive(int packetSize);
 String reciveBig();
@@ -505,6 +508,7 @@ void LoRa_Communication();
 String httpGETRequest(const char* serverName);
 void setClock();
 String getValue(String data, char separator, int index);
+void send_cloud_NN(String sms);
 //--------------------------------------------------------
 //--------------------------------------------------------
 //--------------------------------------------------------
@@ -582,13 +586,14 @@ void setup() {
 
   }
 
-  else if (prg_iteration == 9) {
+  else if (prg_iteration == 9) {  
 
    
-    
-
+    if (Start_or_Restart) PORT_RQ=0;
+    else PORT_RQ=1; 
+    beep.vbeep(2000);
     Serial.println("[STEP 2]:" );//principal code
-    if(SN[0]=='X' || Update_LocalSN_Flag) get_LOCAL_SN();
+    if(SN[0]=='X' || SN[1]=='N' || Update_LocalSN_Flag) get_LOCAL_SN();
     else{
       Serial.println("CHIP ID: " + chipid_str);
       Serial.println("SN FOUND: " + SN+"");
@@ -617,15 +622,17 @@ void setup() {
     if (INCOMPATIBILIDAD_FIRMWARE_ERROR) compatibility_error();
 
     if (is_registered) {
-      if(!FIRMWARE_MODE == 'DEV2.2'){
-        check_configuration();
+      if(!FIRMWARE_MODE == 'DEV'){
+        check_configuration(DEVICE);
         get_ports_sensor();
         get_environment_sensor();//BME
       } 
    
       get_neolink_status(); //solar, internal temp
-      send_cloud();  
+      LoRa_Communication();
+      send_cloud_NN(sms_upload);
         //if (MODE_PRG)  start_MODE_PRG = millis();
+        
     
 
 
@@ -653,7 +660,7 @@ void check_first_WiFi(){
 
 
 int checking_battery() {
-if(FIRMWARE_MODE == 'DEV'||FIRMWARE_MODE == 'DEV2.2'||FIRMWARE_MODE == 'DEV2.1') return 1;
+  //if(FIRMWARE_MODE == 'DEV'||FIRMWARE_MODE == 'DEV2.2'||FIRMWARE_MODE == 'DEV2.1') return 1;
   Serial.println("Checking Battery.. ");
   pinMode(BAT_VALUE, INPUT_PULLDOWN);
   pinMode(SOLAR_VALUE, INPUT);
@@ -948,7 +955,7 @@ int16_t setting_wifi() {
 }
 //------------------------------------------------------------------
 
-void check_configuration() {
+void check_configuration(String direction) {
 
 
 
@@ -974,40 +981,40 @@ void check_configuration() {
 
 
 
-    Firebase.getFloat(firebasedata,  DEVICE + PATH_CONFIGURATION_VALUES + "BAT_H");
+    Firebase.getFloat(firebasedata,  direction + PATH_CONFIGURATION_VALUES + "BAT_H");
     BAT_H = firebasedata.floatData();
     Serial.print("\n BAT_H: " + String(BAT_H));
 
-    Firebase.getFloat(firebasedata,  DEVICE + PATH_CONFIGURATION_VALUES + "BAT_L");
+    Firebase.getFloat(firebasedata,  direction + PATH_CONFIGURATION_VALUES + "BAT_L");
     BAT_L = firebasedata.floatData();
     Serial.print("\n BAT_L: " + String(BAT_L));
 
-    Firebase.getInt(firebasedata,  DEVICE + PATH_CONFIGURATION_VALUES + "BEEP_EN");
+    Firebase.getInt(firebasedata,  direction + PATH_CONFIGURATION_VALUES + "BEEP_EN");
     BEEP_EN = firebasedata.intData();
     Serial.print("\n BEEP_EN: " + String(BEEP_EN));
 
     //Firebase.getInt(firebasedata,  DEVICE + PATH_CONFIGURATION_VALUES + String("GPS_RQ"));
     //GPS_RQ = firebasedata.intData();
 
-    Firebase.getFloat(firebasedata,  DEVICE + PATH_CONFIGURATION_VALUES + "NO_WIFI");
+    Firebase.getFloat(firebasedata,  direction + PATH_CONFIGURATION_VALUES + "NO_WIFI");
     NO_WIFI = firebasedata.floatData();
     Serial.print("\n NO_WIFI: " + String(NO_WIFI));
 
     if (!half_conf_flag) {
 
-      Firebase.getFloat (firebasedata,  DEVICE + PATH_CONFIGURATION_VALUES + "N_END_HOUR");
+      Firebase.getFloat (firebasedata,  direction + PATH_CONFIGURATION_VALUES + "N_END_HOUR");
       N_END_HOUR = firebasedata.floatData();
       Serial.print("\n N_END_HOUR: " + String(N_END_HOUR));
 
-      Firebase.getFloat(firebasedata,  DEVICE + PATH_CONFIGURATION_VALUES + "N_SLEEP_TIME");
+      Firebase.getFloat(firebasedata,  direction + PATH_CONFIGURATION_VALUES + "N_SLEEP_TIME");
       N_SLEEP_TIME = firebasedata.floatData();
       Serial.print("\n N_SLEEP_TIME: " + String(N_SLEEP_TIME));
 
-      Firebase.getFloat(firebasedata,  DEVICE + PATH_CONFIGURATION_VALUES + "N_START_HOUR");
+      Firebase.getFloat(firebasedata,  direction + PATH_CONFIGURATION_VALUES + "N_START_HOUR");
       N_START_HOUR = firebasedata.floatData();
       Serial.print("\n N_START_HOUR: " + String(N_START_HOUR));
 
-      Firebase.getFloat(firebasedata,  DEVICE + PATH_CONFIGURATION_VALUES + "SLEEP_TIME");
+      Firebase.getFloat(firebasedata,  direction + PATH_CONFIGURATION_VALUES + "SLEEP_TIME");
       SLEEP_TIME = firebasedata.floatData();
       Serial.print("\n SLEEP_TIME: " + String(SLEEP_TIME));
 
@@ -1015,34 +1022,34 @@ void check_configuration() {
 
     else Serial.print("\n SLEEP_TIME parameters already read.");
 
-    Firebase.getInt(firebasedata,  DEVICE + PATH_CONFIGURATION_VALUES + "PORT_RQ");
+    Firebase.getInt(firebasedata,  direction + PATH_CONFIGURATION_VALUES + "PORT_RQ");
     PORT_RQ = firebasedata.intData();
     Serial.print("\n PORT_RQ: " + String(PORT_RQ));
     delay(100);
 
-    depth_request();
+    depth_request(direction);
 
-    Firebase.getInt(firebasedata,  DEVICE + PATH_CONFIGURATION_VALUES + "OBSERVER");
+    Firebase.getInt(firebasedata,  direction + PATH_CONFIGURATION_VALUES + "OBSERVER");
     OBSERVER = firebasedata.intData();
     Serial.print("\n OBSERVER: " + String(OBSERVER));
     delay(100);
 
-    Firebase.getInt(firebasedata,  DEVICE + PATH_CONFIGURATION_VALUES + "SENSOR/P1");
+    Firebase.getInt(firebasedata,  direction + PATH_CONFIGURATION_VALUES + "SENSOR/P1");
     SENSOR_P1 = firebasedata.intData();
     Serial.print("\n SENSOR P1: " + String(SENSOR_P1));
     delay(100);
     
-    Firebase.getInt(firebasedata,  DEVICE + PATH_CONFIGURATION_VALUES + "SENSOR/P2");
+    Firebase.getInt(firebasedata,  direction + PATH_CONFIGURATION_VALUES + "SENSOR/P2");
     SENSOR_P2 = firebasedata.intData();
     Serial.print("\n SENSOR P2: " + String(SENSOR_P2));
     delay(100);
     
-    Firebase.getInt(firebasedata,  DEVICE + PATH_CONFIGURATION_VALUES + "SENSOR/P3");
+    Firebase.getInt(firebasedata,  direction + PATH_CONFIGURATION_VALUES + "SENSOR/P3");
     SENSOR_P3 = firebasedata.intData();
     Serial.print("\n SENSOR P3: " + String(SENSOR_P3));
     delay(100);
 
-    Firebase.getInt(firebasedata,  DEVICE + PATH_CONFIGURATION_VALUES + "SENSOR/P4");
+    Firebase.getInt(firebasedata,  direction + PATH_CONFIGURATION_VALUES + "SENSOR/P4");
     SENSOR_P4 = firebasedata.intData();
     Serial.print("\n SENSOR P4: " + String(SENSOR_P4));
     delay(100);
@@ -1074,10 +1081,16 @@ void check_configuration() {
 //------------------------------------------------------------------
 
 void get_ports_sensor() {
+
+
+
+
+
+  
   int8_t loop1_flag = 1;
   char message[500];
   int16_t port_div[50];
-  int8_t sample_div[50];
+  int8_t sample_div[50];                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  div[50];
   int16_t eos; //end of string
   int16_t m = 0;
   int8_t n = 0; // counter ports
@@ -1876,484 +1889,7 @@ void get_neonodes_signals() {
 
 }
 
-//------------------------------------------------------------------
 
-void send_cloud() {
-
-  Firebase.begin(FIREBASE_HOST, FIREBASE_AUTH);
-  Firebase.reconnectWiFi(true);
-
-
-
-  neoFirebaseJson json_port1;
-  neoFirebaseJson json_port2;
-  neoFirebaseJson json_port3;
-  neoFirebaseJson json_port4;
-  neoFirebaseJson json_port_status;
-
-  //---------------------------------------------------PORT 1--------------------------------------------------------------
-  if (Port1_Active) {
-
-      json_port_status.FirebaseJson::set( "Port1_Active" , getValue(message_Json_port1,'_',1));
-
-      String message=getValue(message_Json_port1,'_',0);
-      int8_t n_var_init=0;
-      for (int i = 0; i <= message.length() ; i++) {
-        if (message[i]== ':') {
-         n_var_init++;
-        }
-      }
-        int8_t n_var=n_var_init/2;
-      for(int i=0;i<n_var;i++){
-        json_port1.set(getValue(message,':',2*i+1),double(getValue(message,':',2*i+2).toFloat()),2);
-      }
-  } else  json_port_status.FirebaseJson::set( "Port1_Active", "NaN");
-
-
-
-  //-------------------------------------------------PORT 2----------------------------------------------------------------
-  if (Port2_Active) {
-
-      json_port_status.FirebaseJson::set( "Port2_Active" , getValue(message_Json_port2,'_',1));
-      String message=getValue(message_Json_port2,'_',0);
-      int8_t n_var_init=0;
-      for (int i = 0; i <= message.length() ; i++) {
-        if (message[i]== ':') {
-         n_var_init++;
-        }
-      }
-        int8_t n_var=n_var_init/2;
-      for(int i=0;i<n_var;i++){
-        json_port2.set(getValue(message,':',2*i+1),double(getValue(message,':',2*i+2).toFloat()),2);
-      }
-    
-
-  }
-  else  json_port_status.FirebaseJson::set( "Port2_Active", "NaN");
-
-  //-------------------------------------------------PORT 3----------------------------------------------------------------
-  if (Port3_Active) {
-
-      json_port_status.FirebaseJson::set( "Port3_Active" , getValue(message_Json_port3,'_',1));
-      String message=getValue(message_Json_port3,'_',0);
-      int8_t n_var_init=0;
-      for (int i = 0; i <= message.length() ; i++) {
-        if (message[i]== ':') {
-         n_var_init++;
-        }
-      }
-        int8_t n_var=n_var_init/2;
-      for(int i=0;i<n_var;i++){
-        json_port3.set(getValue(message,':',2*i+1),double(getValue(message,':',2*i+2).toFloat()),2);
-      }
-  }
-  else  json_port_status.FirebaseJson::set( "Port3_Active", "NaN");
-
-  //-----------------------------------------------PORT 4------------------------------------------------------------------
-  if (Port4_Active) {
-
-      json_port_status.FirebaseJson::set( "Port4_Active" , getValue(message_Json_port4,'_',1));
-      String message=getValue(message_Json_port4,'_',0);
-      int8_t n_var_init=0;
-      for (int i = 0; i <= message.length() ; i++) {
-        if (message[i]== ':') {
-         n_var_init++;
-        }
-      }
-        int8_t n_var=n_var_init/2;
-      for(int i=0;i<n_var;i++){
-        json_port4.set(getValue(message,':',2*i+1),double(getValue(message,':',2*i+2).toFloat()),2);
-      }
-  }
-  else  json_port_status.FirebaseJson::set("Port4_Active", "NaN");
-
-  //----------------------------------------------------END PORT------------------------------------------------------------
-
-  float temp_factor = 0.11;
-  if (internal_temperature <= 21.5) temp_factor = 0;
-  //dry_bulb_temp_mov=dry_bulb_temp_mov- temp_factor*(internal_temperature_voltage - dry_bulb_temp_mov);
-  dry_bulb_temp_mov = dry_bulb_temp_mov - temp_factor * (internal_temperature - dry_bulb_temp_mov);
-
-  
-
-  //Json State
-  neoFirebaseJson json_state;
-  
-
-  //sending weather values
-  if (!no_atmos) {
-    json_state.set("dT", double(dry_bulb_temp_mov), 2);
-    json_state.set("dT_raw", double(dry_bulb_temp), 2);
-    json_state.set("BP", double(barometric_pressure), 2);
-    json_state.set("RH", double(relative_humidity), 2);
-    json_state.set("RH_aux", double(relative_humidity_aux), 1);
-    json_state.FirebaseJson::set("AL", int(pressure_altitude));
-    json_state.set("BV", double(battery_voltage), 3);
-    json_state.set("SV", double(solar_voltage), 2);
-    json_state.set("iT", double(internal_temperature), 1);
-    json_state.set("iT_raw", double(internal_temperature_raw), 1);
-    json_state.set("iT_aux", double(dry_bulb_temp_aux), 1);
-    json_state.set("WS", double(wind_speed), 2);
-    json_state.FirebaseJson::set("WD", int(wind_deg));
-    json_state.FirebaseJson::set("OP_TIME", int(millis() / 1000));
-
-  }
-  /*
-    json_state.set("BV", double(battery_voltage), 3);
-    json_state.set("SV", double(solar_voltage), 2);
-    json_state.set("iT", double(internal_temperature), 1);
-    json_state.set("WS", double(wind_speed), 2);
-    json_state.set("WD", int(wind_deg));
-    json_state.set("OP_TIME", int(millis() / 1000));
-  */
-
-
-  //sending gps values
-  //Serial.println("GPS_CLOUD" + String(GPS_CLOUD));
-  //Serial.println(LATITUDE);
-  neoFirebaseJson json_gps;
-  if (GPS_CLOUD && LATITUDE != -8.079025 && LONGITUDE != -79.122865 ) {
-    json_gps.set("LAT", LATITUDE, 5);
-    json_gps.set("LONG", LONGITUDE, 5);
-  }
-
-  //enabling wifi if enable
-  if (WIFI_EN) {
-    if (!wifi_conf_isSet) wifi_conf_isSet = setting_wifi();
-    if ( WiFi.status() != WL_CONNECTED) starting_wifi();
-  }
-
-
-
-
-  struct tm timeinfo_2;
-
-  configTime(gmtOffset_sec, daylightOffset_sec, "pool.ntp.org", "time.nist.gov");
-  struct tm timeinfo;
-  getLocalTime(&timeinfo);
-  int time_rep = 0;
-  while ( (timeinfo.tm_year - 100 < 0) )
-  {
-    getLocalTime(&timeinfo);
-    delay(100);
-    time_rep ++;
-    Serial.print("Time obtained error. Try: ");
-    Serial.println(time_rep);
-    if (time_rep > 4) deepsleep(1);
-  }
-
-
-  String _year = String(timeinfo.tm_year - 100);
-  int8_t i_mon = timeinfo.tm_mon;
-  int8_t i_day = timeinfo.tm_mday;
-  int8_t i_hour = timeinfo.tm_hour;
-  int8_t i_min = timeinfo.tm_min;
-  int8_t i_secs = timeinfo.tm_sec;
-
-
-  String real_month;
-  if (i_mon < 9) real_month = "0" + String(i_mon + 1);
-  else real_month = String(i_mon + 1);
-
-  String real_day;
-  if (i_day < 10) real_day = "0" + String(i_day);
-  else real_day = String(i_day);
-
-  String real_hour;
-  if (i_hour < 10) real_hour = "0" + String(i_hour);
-  else real_hour = String(i_hour);
-
-  String real_min;
-  if (i_min < 10) real_min = "0" + String(i_min);
-  else real_min = String(i_min);
-
-
-  String real_secs;
-  if (i_secs < 10) real_secs = "0" + String(i_secs);
-  else real_secs = String(i_secs);
-
-
-  actual_hour = i_hour;
-  actual_min = i_min;
-  actual_secs = i_secs;
-
-
-
-  String auxiliar_string = _year + "/" + real_month + "/" + real_day + " " + real_hour + ":" + real_min + ":" + real_secs;
-
-  String _hour;
-
-  check_configuration();
-  
-  boolean p1_err = Port1_Active != SENSOR_P1 ;
-  boolean p2_err = Port2_Active != SENSOR_P2 ;
-  boolean p3_err = Port3_Active != SENSOR_P3 ;
-  boolean p4_err = Port4_Active != SENSOR_P4 ;
-
- 
-  /*
-  Serial.println(p1_err);
-  Serial.println(p2_err);
-  Serial.println(p3_err);
-  Serial.println(p4_err); */
-
-  boolean p1_err_c = p1_err ;
-  boolean p2_err_c = p2_err ;
-  boolean p3_err_c = p3_err ;
-  boolean p4_err_c = p4_err ;
-
-if ( Port1_Active )  p1_err_c = 0;
-if ( Port2_Active )  p2_err_c = 0;
-if ( Port3_Active )  p3_err_c = 0;
-if ( Port4_Active )  p4_err_c = 0;
-
-
-  
-
-  /*
-  Serial.println(p1_err_c);
-  Serial.println(p2_err_c);
-  Serial.println(p3_err_c);
-  Serial.println(p4_err_c); */
-
-
-  if( p1_err_c || p2_err_c ||  p3_err_c || p4_err_c) {
-    Serial.println("FORCED RESET.");
-    FORCED_RESET_TASK();
-    
-  }
-
-  boolean p1_depth_err = 0;
-  boolean p2_depth_err = 0;
-  boolean p3_depth_err = 0;
-  boolean p4_depth_err = 0;
-
-   // define sensors implies depth 
-  if (SENSOR_P1) p1_depth_err = DEPTH1 == 0;
-  if (SENSOR_P2) p2_depth_err = DEPTH2 == 0;
-  if (SENSOR_P3) p3_depth_err = DEPTH3 == 0;
-  if (SENSOR_P4) p4_depth_err = DEPTH4 == 0;
-  
-
-  if (p1_depth_err || p2_depth_err || p3_depth_err || p4_depth_err) { 
-
-    Serial.println("depth request failed.");
-    depth_request(); 
-    if (SENSOR_P1) p1_depth_err = DEPTH1 == 0;
-    if (SENSOR_P2) p2_depth_err = DEPTH2 == 0;
-    if (SENSOR_P3) p3_depth_err = DEPTH3 == 0;
-    if (SENSOR_P4) p4_depth_err = DEPTH4 == 0;
-    if (p1_depth_err || p2_depth_err || p3_depth_err || p4_depth_err) deepsleep(1);
-    Serial.println();
-  }
- 
-
-  int qmin;
-
-  if (i_hour > N_END_HOUR &&  i_hour < N_START_HOUR) {
-    qmin = SLEEP_TIME / 60;
-  }
-
-
-  else qmin = (N_SLEEP_TIME / 60);
-
-  i_min = ((i_min + 1) / qmin) * qmin;
-
-  //Serial.print("i_min");
-  //Serial.println(i_min);
-
-
-  if (i_min >= 60) {
-    i_min = 0;
-
-    i_hour = i_hour + 1;
-    if (i_hour >= 24) {
-      i_hour = 0;
-      _hour = "0" + String(i_hour);
-      i_day = i_day + 1;
-
-
-      if (i_day > 28) {
-
-        configTime(gmtOffset_sec + 300, daylightOffset_sec, "pool.ntp.org", "time.nist.gov");
-        getLocalTime(&timeinfo_2);
-        time_rep = 0;
-        while ( (timeinfo_2.tm_year - 100 < 0) )
-        {
-          getLocalTime(&timeinfo_2);
-          delay(100);
-          time_rep ++;
-          Serial.print("Time obtained error. Try: ");
-          Serial.println(time_rep);
-          if (time_rep > 4) deepsleep(1);
-        }
-
-
-        Serial.println(&timeinfo_2, "%A, %B %d %Y %H:%M:%S");
-
-
-        i_day = timeinfo_2.tm_mday;
-
-        i_mon = timeinfo_2.tm_mon;
-
-        _year = String(timeinfo_2.tm_year - 100);
-
-        i_secs = timeinfo_2.tm_sec;
-
-
-      }
-
-    }
-  }
-
-  Serial.println(&timeinfo, "%A, %B %d %Y %H:%M:%S");
-
-
-  String _month;
-  if (i_mon < 9) _month = "0" + String(i_mon + 1);
-  else _month = String(i_mon + 1);
-
-  String _day;
-  if (i_day < 10) _day = "0" + String(i_day);
-  else _day = String(i_day);
-
-
-  if (i_hour < 10) _hour = "0" + String(i_hour);
-  else _hour = String(i_hour);
-
-  String _min;
-  if (i_min < 10) _min = "0" + String(i_min);
-  else _min = String(i_min);
-
-
-  String _secs;
-  if (i_secs < 10) _secs = "0" + String(i_secs);
-  else _secs = String(i_secs);
-/*
-  FirebaseJson json_observer;
-
-  json_observer.set("/P1_msg", port1_msg);
-  json_observer.set("/P2_msg", port2_msg);
-  json_observer.set("/P3_msg", port3_msg);
-  json_observer.set("/P4_msg", port4_msg);
-
-  String buff_string_obserever;
-  json_observer.toString(buff_string_obserever,true);
-  Serial.println(buff_string_obserever); 
-
-  */
-
-  if (Port1_Active) json_port1.FirebaseJson::set("/P1/Depth", DEPTH1);
-  if (Port2_Active) json_port2.FirebaseJson::set("/P2/Depth", DEPTH2);
-  if (Port3_Active) json_port3.FirebaseJson::set("/P3/Depth", DEPTH3);
-  if (Port4_Active) json_port4.FirebaseJson::set("/P4/Depth", DEPTH4);
-
-  String timestamp_string2 = _year + "/" + _month + "/" + _day + " " + _hour + ":" + _min;
-  Serial.println("Firebase timestamp: " + timestamp_string2);
-  String timestamp_string = "/" + _year + "/" + _month + "/" + _day + "/" + _hour + "/" + _min;
-
-
-  //sending Firebase
-  if (PORT_RQ) {
-    Firebase.updateNodeSilent(firebasedata, DEVICE + PATH_CONFIGURATION_STATUS + "Port/" , json_port_status);
-    if (Port1_Active){ Firebase.updateNodeSilent(firebasedata, DEVICE +  PATH_DATA  + port1_type + timestamp_string , json_port1);
-    Serial.println("Send P1.");
-    delay(150);}
-
-    if (Port2_Active) {Firebase.updateNodeSilent(firebasedata, DEVICE +  PATH_DATA  + port2_type + timestamp_string , json_port2);
-    Serial.println("Send P2.");
-    delay(150);}
-
-    if (Port3_Active){Firebase.updateNodeSilent(firebasedata, DEVICE +  PATH_DATA  + port3_type + timestamp_string , json_port3);
-    Serial.println("Send P3.");
-    delay(150);}
-
-    if (Port4_Active) {Firebase.updateNodeSilent(firebasedata, DEVICE +  PATH_DATA  + port4_type + timestamp_string , json_port4);
-    Serial.println("Send P4.");
-    delay(150);}
-  }
-  
-  if (GPS_CLOUD) Firebase.updateNodeSilent(firebasedata, DEVICE + PATH_CONFIGURATION_STATUS  + "GPS" , json_gps);
-
-  delay(150);
-  Firebase.updateNodeSilent(firebasedata, DEVICE + PATH_DATA  + "/State" + timestamp_string, json_state);
-  double LAST_OP_TIME = double(millis() / 1000);
-  Firebase.setDouble(firebasedata, DEVICE + PATH_CONFIGURATION_STATUS + "LastOP_TIME", LAST_OP_TIME );
-
-
-  Firebase.setString(firebasedata, DEVICE + PATH_CONFIGURATION_STATUS + "WiFi_rssi", String(WiFi.RSSI()));
-
-
-  //Serial.print("LastUpload: ");
-  //Serial.println(auxiliar_string);
-
-  Firebase.setString(firebasedata, DEVICE + PATH_CONFIGURATION_STATUS + "LastUpload", auxiliar_string );
-
-  delay(150);
-
-  //Firebase.updateNodeSilent(firebasedata, DEVICE + "/Observer" + timestamp_string, json_observer);
-
-  
-
-
-  Firebase.setString(firebasedata, DEVICE + PATH_CONFIGURATION_STATUS + "FireTimeStamp", timestamp_string2 );
-  
-
-  if (Start_or_Restart) {
-    Firebase.setString(firebasedata, DEVICE + PATH_CONFIGURATION_STATUS + "LastRestart", auxiliar_string);
-    Start_or_Restart = 0;
-    Firebase.setString(firebasedata, DEVICE + PATH_CONFIGURATION_STATUS + "Firmware", FIRMWARE_VER);
-    Firebase.setString(firebasedata, DEVICE + PATH_CONFIGURATION_STATUS + "WifiSSID", WIFI_SSID_DEFAULT);
-  }
-
-  int real_sleep;
-  if ( !MODE_PRG) {
-    Firebase.setString(firebasedata, DEVICE + PATH_CONFIGURATION_STATUS + "IP", "Nope");
-    real_sleep = real_sleep_time();
-    Serial.print("Real Sleep Time = ");
-    Serial.println(real_sleep);
-    Firebase.setInt(firebasedata, DEVICE + PATH_CONFIGURATION_STATUS + "real_sleep", real_sleep);
-
-    Firebase.setInt(firebasedata,  DEVICE + PATH_CONFIGURATION_STATUS + "NewConf", 0);
-
-    /*
-      if (GPS_CLOUD) {
-      //Serial.println("GPS_RQ a cero");
-      Firebase.setInt(firebasedata, DEVICE + PATH_CONFIGURATION_VALUES + "GPS_RQ", 0 );
-      }
-    */
-
-
-
-
-
-    WiFi.disconnect(true);
-    WiFi.mode(WIFI_OFF);
-
-    turn_modem_off();
-
-
-  }
-  else Firebase.setString(firebasedata, DEVICE + PATH_CONFIGURATION_STATUS + "IP", String( WiFi.localIP().toString()));
-
-  beep.vbeep(200);
-  if (BEEP_EN) beep.vbeep(150);
-
-  if (WiFi.status() != WL_CONNECTED) Serial.println("Wi-Fi Disconnected");
-  else  Serial.println("Wi-Fi Still Connected\n");
-
-  Serial.println("OP_TIME_2: " + String(int(millis() / 1000)));
-
-  if (!MODE_PRG) deepsleep(real_sleep);
-  //start_server();
-
-  if (BEEP_EN) {
-    beep.vbeep(100);
-    delay(40);
-    beep.vbeep(100);
-  }
-
-}
 
 void turn_modem_off() {
   Serial.println("Turning Modem OFF");
@@ -3009,26 +2545,26 @@ void setClock() {
 
 
 
-void depth_request() {
+void depth_request(String direc) {
 
   Serial.print("\n Requesting Depths:");
 
-  Firebase.getInt(firebasedata,  DEVICE + PATH_CONFIGURATION_VALUES + "DEPTH/P1");
+  Firebase.getInt(firebasedata,  direc + PATH_CONFIGURATION_VALUES + "DEPTH/P1");
   DEPTH1 = firebasedata.intData();
   Serial.print("\n DEPTH1: " + String(DEPTH1));
   delay(100);
 
-  Firebase.getInt(firebasedata,  DEVICE + PATH_CONFIGURATION_VALUES + "DEPTH/P2");
+  Firebase.getInt(firebasedata,  direc + PATH_CONFIGURATION_VALUES + "DEPTH/P2");
   DEPTH2 = firebasedata.intData();
   Serial.print("\n DEPTH2: " + String(DEPTH2));
   delay(100);
 
-  Firebase.getInt(firebasedata,  DEVICE + PATH_CONFIGURATION_VALUES + "DEPTH/P3");
+  Firebase.getInt(firebasedata,  direc + PATH_CONFIGURATION_VALUES + "DEPTH/P3");
   DEPTH3 = firebasedata.intData();
   Serial.print("\n DEPTH3: " + String(DEPTH3));
   delay(100);
 
-  Firebase.getInt(firebasedata,  DEVICE + PATH_CONFIGURATION_VALUES + "DEPTH/P4");
+  Firebase.getInt(firebasedata,  direc + PATH_CONFIGURATION_VALUES + "DEPTH/P4");
   DEPTH4 = firebasedata.intData();
   Serial.print("\n DEPTH4: " + String(DEPTH4));
   delay(100);
@@ -3079,6 +2615,7 @@ void FORCED_RESET_TASK(){
 }
 
 void deepsleep(int time2sleep) {
+  //if (Start_or_Restart && prg_iteration==9 ) time2sleep=1;
   esp_sleep_enable_timer_wakeup(time2sleep * uS_TO_S_FACTOR);
   Serial.println("Going to sleep for " + String(time2sleep) + " Seconds");
   Serial.println();
@@ -3129,6 +2666,7 @@ void config_LoRa(){
 
 void sendMessage(String outgoing)
 {
+  Serial.println(outgoing);
   LoRa.beginPacket();                   // start packet
   LoRa.write(destination);              // add Neolink address
   LoRa.write(localAddress);             // add Neonode address
@@ -3179,6 +2717,11 @@ String onReceive(int packetSize)
   Serial.println("RSSI: " + String(LoRa.packetRssi()));
   Serial.println("Snr: " + String(LoRa.packetSnr()));
   Serial.println();
+  /*
+  if(incoming=="START" ){
+    sendMessage("1");
+  }
+  */
   return incoming;
 }
 
@@ -3220,18 +2763,23 @@ String reciveBig(){
     Serial.println(message);
     }
     msg_prev=msg;
+    Serial.println(msg_prev);
     Serial.println(message);
     while(packetsize==0){
       packetsize=LoRa.parsePacket();
+      //Serial.println(packetsize);
     }
     msg=onReceive(packetsize);
     Serial.println(msg);
-    control=Comparator(msg);
+    //control=0;
+    control=Comparator(msg);//mejorar
     packetsize=0;
   }
+ Serial.println("--1--");
  Serial.println(message);
  return message;
 }
+
 bool Comparator_msg(String msg1,String msg2){
   int length1=msg1.length();
   int length2=msg2.length();
@@ -3240,13 +2788,14 @@ bool Comparator_msg(String msg1,String msg2){
   msg1.toCharArray(msga,length1+1);
   msg2.toCharArray(msgb,length2+1);
   if(strcmp(msga,msgb)==0){
-    Serial.print("iguales");
+    Serial.println("iguales");
     return false;
   } else {
     Serial.println("diferentes");
     return true;
   }
 }
+
 bool Comparator(String msg){
   char compare[]="FIN";
   int length=msg.length();
@@ -3259,26 +2808,38 @@ bool Comparator(String msg){
     return true;
   }
 }
+
 void LoRa_Communication(){
-    long start=millis();
+  Serial.println("Entre a la funcion");
+
   config_LoRa();
   String sms;
   String msg;
   int16_t msg_length;
-  long start_time;
+  long start_time=millis();
   String message="DATA";
   int packetsize=0;
   delay(500);
-  while(millis()-start_time<=1000){
+  
+  while(millis()-start_time<1000){
     sendMessage(message);
     Serial.println(message);
-    Serial.println(packetsize);
+
   }
+  
   sms=reciveBig();
+
+  //sms="NN0000-0002$:/P1/V1:-920.8000:/P1/V2:20.0000_k_1$$$:/P4/V1:1736.1500:/P4/V2:19.9500:/P4/V3:0.5000%:/P4/VWC:0.0000:/P4/ApPer:0.3864:/P4/PorePer:80.3185:/P4/PoreCE:0.0000_g_1$SV$5.19$BV$3.77$iT_raw$-127.00$iT$-127.00$7.00$iT$-127.00$7.00$iT$-127.00$7.00$iT$-127.00$";
   Serial.println(sms);
-  Transform_NN_variables(sms);
-  sendDeepSleep();
+  beep.vbeep(1000);
+  Upload(sms);
+  Serial.println("--1.5--");
+  sms_upload=sms;
+  Serial.println("--2--");
+  //Transform_NN_variables(sms);//
+  //sendDeepSleep();//
 }
+
 void sendDeepSleep(){
   int16_t sleep_timee;
    if (actual_hour > N_END_HOUR && actual_hour < N_START_HOUR) {
@@ -3290,9 +2851,12 @@ void sendDeepSleep(){
     sleep_timee = int(N_SLEEP_TIME) - (actual_min * 60 + actual_secs) % int(N_SLEEP_TIME) - (millis()) / 1000;
     if (sleep_timee <= 0) sleep_timee = sleep_timee + int(N_SLEEP_TIME);
   }
+
   SLEEP_TIME_modem = sleep_timee - SLEEP_TIME_PRE + 10;
   sendMessage(String(SLEEP_TIME_modem));
 }
+
+
 String Transform_Variables(String msg,int n_var,int Port_Active){
  
   //String variables_g="%P_humidity_m3m3%P_aparent_perm%P_pore_perm%P_water_pore_cond";
@@ -3349,3 +2913,470 @@ String Transform_Variables(String msg,int n_var,int Port_Active){
   } else msg_Json="NaN";
   return msg_Json;
 }
+
+void Upload(String message) {
+
+  if ( WiFi.status() != WL_CONNECTED) starting_wifi();
+
+  if ( WiFi.status() == WL_CONNECTED) {
+    Firebase.setString(firebasedata, "/PRUEBA/Mensaje" , message);
+      beep.vbeep(250);
+      delay(100);
+      beep.vbeep(250);
+      delay(100);
+      beep.vbeep(250);
+      delay(100);
+      beep.vbeep(250);
+      delay(100);
+      beep.vbeep(250);
+  }
+
+}
+
+
+void send_cloud_NN(String sms){
+  Firebase.begin(FIREBASE_HOST, FIREBASE_AUTH);
+  Firebase.reconnectWiFi(true);
+  neoFirebaseJson json_port1;
+  neoFirebaseJson json_port2;
+  neoFirebaseJson json_port3;
+  neoFirebaseJson json_port4;
+  neoFirebaseJson json_port_status;
+
+  Port1_Active=0;
+  Port2_Active=0;
+  Port3_Active=0;
+  Port4_Active=0;
+
+
+  String SN_NN=getValue(sms,'$',0);
+  String DEVICE_NN = "/" + DEVICE_TYPE + "/" + SN + "/NeoNode/" + SN_NN ;
+  //---------------------------------------------------PORT 1--------------------------------------------------------------
+    if (getValue(getValue(sms,'$',1),'_',1).length()>0) {
+      Port1_Active=1;
+      message_Json_port1=getValue(sms,'$',1);
+      Serial.println(message_Json_port1);
+      json_port_status.FirebaseJson::set( "Port1_Active" , getValue(message_Json_port1,'_',1));
+      
+      String message=getValue(message_Json_port1,'_',0);
+      Serial.println(message);
+      int8_t n_var_init=0;
+      for (int i = 0; i <= message.length() ; i++) {
+        if (message[i]== ':') {
+         n_var_init++;
+        }
+      }
+        int8_t n_var=n_var_init/2;
+      for(int i=0;i<n_var;i++){
+        json_port1.set(getValue(message,':',2*i+1),double(getValue(message,':',2*i+2).toFloat()),2);
+      }
+
+
+  } else  json_port_status.FirebaseJson::set( "Port1_Active", "NaN");
+  //-------------------------------------------------PORT 2----------------------------------------------------------------
+  if (getValue(getValue(sms,'$',2),'_',1).length()>0) {
+      Port2_Active=1;
+      message_Json_port2=getValue(sms,'$',2);
+      json_port_status.FirebaseJson::set( "Port2_Active" , getValue(message_Json_port2,'_',1));
+      String message=getValue(message_Json_port2,'_',0);
+      int8_t n_var_init=0;
+      for (int i = 0; i <= message.length() ; i++) {
+        if (message[i]== ':') {
+         n_var_init++;
+        }
+      }
+        int8_t n_var=n_var_init/2;
+      for(int i=0;i<n_var;i++){
+        json_port2.set(getValue(message,':',2*i+1),double(getValue(message,':',2*i+2).toFloat()),2);
+      }
+    
+
+  }
+  else  json_port_status.FirebaseJson::set( "Port2_Active", "NaN");
+  //-------------------------------------------------PORT 3----------------------------------------------------------------
+  if (getValue(getValue(sms,'$',3),'_',1).length()>0) {
+      Port3_Active=1;
+      message_Json_port3=getValue(sms,'$',3);
+      json_port_status.FirebaseJson::set( "Port3_Active" , getValue(message_Json_port3,'_',1));
+      String message=getValue(message_Json_port3,'_',0);
+      int8_t n_var_init=0;
+      for (int i = 0; i <= message.length() ; i++) {
+        if (message[i]== ':') {
+         n_var_init++;
+        }
+      }
+        int8_t n_var=n_var_init/2;
+      for(int i=0;i<n_var;i++){
+        json_port3.set(getValue(message,':',2*i+1),double(getValue(message,':',2*i+2).toFloat()),2);
+      }
+  }
+  else  json_port_status.FirebaseJson::set( "Port3_Active", "NaN");
+
+  //-----------------------------------------------PORT 4------------------------------------------------------------------
+  if (getValue(getValue(sms,'$',4),'_',1).length()>0) {
+      Port4_Active=1;
+      message_Json_port4=getValue(sms,'$',4);
+      Serial.println(message_Json_port4);
+      json_port_status.FirebaseJson::set( "Port4_Active" , getValue(message_Json_port4,'_',1));
+      String message=getValue(message_Json_port4,'_',0);
+      Serial.println(message);
+      int8_t n_var_init=0;
+      for (int i = 0; i <= message.length() ; i++) {
+        if (message[i]== ':') {
+         n_var_init++;
+        }
+      }
+        int8_t n_var=n_var_init/2;
+      for(int i=0;i<n_var;i++){
+        json_port4.set(getValue(message,':',2*i+1),double(getValue(message,':',2*i+2).toFloat()),2);
+      }
+  }
+  else  json_port_status.FirebaseJson::set("Port4_Active", "NaN");
+
+  //----------------------------------------------------END PORT------------------------------------------------------------
+  neoFirebaseJson json_state;
+  if (WIFI_EN) {
+    if (!wifi_conf_isSet) wifi_conf_isSet = setting_wifi();
+    if ( WiFi.status() != WL_CONNECTED) starting_wifi();
+  }
+
+  struct tm timeinfo_2;
+
+  configTime(gmtOffset_sec, daylightOffset_sec, "pool.ntp.org", "time.nist.gov");
+  struct tm timeinfo;
+  getLocalTime(&timeinfo);
+  int time_rep = 0;
+  while ( (timeinfo.tm_year - 100 < 0) )
+  {
+    getLocalTime(&timeinfo);
+    delay(100);
+    time_rep ++;
+    Serial.print("Time obtained error. Try: ");
+    Serial.println(time_rep);
+    if (time_rep > 4) deepsleep(1);
+  }
+
+
+  String _year = String(timeinfo.tm_year - 100);
+  int8_t i_mon = timeinfo.tm_mon;
+  int8_t i_day = timeinfo.tm_mday;
+  int8_t i_hour = timeinfo.tm_hour;
+  int8_t i_min = timeinfo.tm_min;
+  int8_t i_secs = timeinfo.tm_sec;
+
+
+  String real_month;
+  if (i_mon < 9) real_month = "0" + String(i_mon + 1);
+  else real_month = String(i_mon + 1);
+
+  String real_day;
+  if (i_day < 10) real_day = "0" + String(i_day);
+  else real_day = String(i_day);
+
+  String real_hour;
+  if (i_hour < 10) real_hour = "0" + String(i_hour);
+  else real_hour = String(i_hour);
+
+  String real_min;
+  if (i_min < 10) real_min = "0" + String(i_min);
+  else real_min = String(i_min);
+
+
+  String real_secs;
+  if (i_secs < 10) real_secs = "0" + String(i_secs);
+  else real_secs = String(i_secs);
+
+
+  actual_hour = i_hour;
+  actual_min = i_min;
+  actual_secs = i_secs;
+
+
+
+  String auxiliar_string = _year + "/" + real_month + "/" + real_day + " " + real_hour + ":" + real_min + ":" + real_secs;
+
+  String _hour;
+
+  check_configuration(DEVICE_NN);
+
+  boolean p1_err = Port1_Active != SENSOR_P1 ;
+  boolean p2_err = Port2_Active != SENSOR_P2 ;
+  boolean p3_err = Port3_Active != SENSOR_P3 ;
+  boolean p4_err = Port4_Active != SENSOR_P4 ;
+
+ 
+  /*
+  Serial.println(p1_err);
+  Serial.println(p2_err);
+  Serial.println(p3_err);
+  Serial.println(p4_err); */
+
+  boolean p1_err_c = p1_err ;
+  boolean p2_err_c = p2_err ;
+  boolean p3_err_c = p3_err ;
+  boolean p4_err_c = p4_err ;
+
+  if ( Port1_Active )  p1_err_c = 0;
+  if ( Port2_Active )  p2_err_c = 0;
+  if ( Port3_Active )  p3_err_c = 0;
+  if ( Port4_Active )  p4_err_c = 0;
+
+
+  
+
+  /*
+  Serial.println(p1_err_c);
+  Serial.println(p2_err_c);
+  Serial.println(p3_err_c);
+  Serial.println(p4_err_c); */
+
+
+  if( p1_err_c || p2_err_c ||  p3_err_c || p4_err_c) {
+    Serial.println("FORCED RESET.");
+    FORCED_RESET_TASK();
+    
+  }
+
+  boolean p1_depth_err = 0;
+  boolean p2_depth_err = 0;
+  boolean p3_depth_err = 0;
+  boolean p4_depth_err = 0;
+
+   // define sensors implies depth 
+  if (SENSOR_P1) p1_depth_err = DEPTH1 == 0;
+  if (SENSOR_P2) p2_depth_err = DEPTH2 == 0;
+  if (SENSOR_P3) p3_depth_err = DEPTH3 == 0;
+  if (SENSOR_P4) p4_depth_err = DEPTH4 == 0;
+  
+
+  if (p1_depth_err || p2_depth_err || p3_depth_err || p4_depth_err) { 
+
+    Serial.println("depth request failed.");
+    depth_request(DEVICE_NN); 
+    if (SENSOR_P1) p1_depth_err = DEPTH1 == 0;
+    if (SENSOR_P2) p2_depth_err = DEPTH2 == 0;
+    if (SENSOR_P3) p3_depth_err = DEPTH3 == 0;
+    if (SENSOR_P4) p4_depth_err = DEPTH4 == 0;
+    if (p1_depth_err || p2_depth_err || p3_depth_err || p4_depth_err) deepsleep(1);
+    Serial.println();
+  }
+ 
+
+  int qmin;
+
+  if (i_hour > N_END_HOUR &&  i_hour < N_START_HOUR) {
+    qmin = SLEEP_TIME / 60;
+  }
+
+
+  else qmin = (N_SLEEP_TIME / 60);
+
+  i_min = ((i_min + 1) / qmin) * qmin;
+
+  //Serial.print("i_min");
+  //Serial.println(i_min);
+
+
+  if (i_min >= 60) {
+    i_min = 0;
+
+    i_hour = i_hour + 1;
+    if (i_hour >= 24) {
+      i_hour = 0;
+      _hour = "0" + String(i_hour);
+      i_day = i_day + 1;
+
+
+      if (i_day > 28) {
+
+        configTime(gmtOffset_sec + 300, daylightOffset_sec, "pool.ntp.org", "time.nist.gov");
+        getLocalTime(&timeinfo_2);
+        time_rep = 0;
+        while ( (timeinfo_2.tm_year - 100 < 0) )
+        {
+          getLocalTime(&timeinfo_2);
+          delay(100);
+          time_rep ++;
+          Serial.print("Time obtained error. Try: ");
+          Serial.println(time_rep);
+          if (time_rep > 4) deepsleep(1);
+        }
+
+
+        Serial.println(&timeinfo_2, "%A, %B %d %Y %H:%M:%S");
+
+
+        i_day = timeinfo_2.tm_mday;
+
+        i_mon = timeinfo_2.tm_mon;
+
+        _year = String(timeinfo_2.tm_year - 100);
+
+        i_secs = timeinfo_2.tm_sec;
+
+
+      }
+
+    }
+  }
+
+  Serial.println(&timeinfo, "%A, %B %d %Y %H:%M:%S");
+
+
+  String _month;
+  if (i_mon < 9) _month = "0" + String(i_mon + 1);
+  else _month = String(i_mon + 1);
+
+  String _day;
+  if (i_day < 10) _day = "0" + String(i_day);
+  else _day = String(i_day);
+
+
+  if (i_hour < 10) _hour = "0" + String(i_hour);
+  else _hour = String(i_hour);
+
+  String _min;
+  if (i_min < 10) _min = "0" + String(i_min);
+  else _min = String(i_min);
+
+
+  String _secs;
+  if (i_secs < 10) _secs = "0" + String(i_secs);
+  else _secs = String(i_secs);
+  /*
+  FirebaseJson json_observer;
+
+  json_observer.set("/P1_msg", port1_msg);
+  json_observer.set("/P2_msg", port2_msg);
+  json_observer.set("/P3_msg", port3_msg);
+  json_observer.set("/P4_msg", port4_msg);
+
+  String buff_string_obserever;
+  json_observer.toString(buff_string_obserever,true);
+  Serial.println(buff_string_obserever); 
+
+  */
+
+
+
+  if (Port1_Active) json_port1.FirebaseJson::set("/P1/Depth", DEPTH1);
+  if (Port2_Active) json_port2.FirebaseJson::set("/P2/Depth", DEPTH2);
+  if (Port3_Active) json_port3.FirebaseJson::set("/P3/Depth", DEPTH3);
+  if (Port4_Active) json_port4.FirebaseJson::set("/P4/Depth", DEPTH4);
+
+  String timestamp_string2 = _year + "/" + _month + "/" + _day + " " + _hour + ":" + _min;
+  Serial.println("Firebase timestamp: " + timestamp_string2);
+  String timestamp_string = "/" + _year + "/" + _month + "/" + _day + "/" + _hour + "/" + _min;
+
+
+  //sending Firebase
+  if (PORT_RQ) {
+    Firebase.updateNodeSilent(firebasedata, DEVICE_NN + PATH_CONFIGURATION_STATUS + "Port/" , json_port_status);
+    
+    if (Port1_Active){Firebase.updateNodeSilent(firebasedata, DEVICE_NN +  PATH_DATA  + getValue(message_Json_port1,'_',1) + timestamp_string , json_port1);
+    Serial.println("Send P1.");
+    delay(150);}
+
+    if (Port2_Active){Firebase.updateNodeSilent(firebasedata, DEVICE_NN +  PATH_DATA  + getValue(message_Json_port2,'_',1) + timestamp_string , json_port2);
+    Serial.println("Send P2.");
+    delay(150);}
+
+    if (Port3_Active){Firebase.updateNodeSilent(firebasedata, DEVICE_NN +  PATH_DATA  + getValue(message_Json_port3,'_',1) + timestamp_string , json_port3);
+    Serial.println("Send P3.");
+    delay(150);}
+
+    if (Port4_Active){Firebase.updateNodeSilent(firebasedata, DEVICE_NN +  PATH_DATA  + getValue(message_Json_port4,'_',1) + timestamp_string , json_port4);
+    Serial.println("Send P4.");
+    delay(150);}
+  }
+  
+  //if (GPS_CLOUD) Firebase.updateNodeSilent(firebasedata, DEVICE_NN + PATH_CONFIGURATION_STATUS  + "GPS" , json_gps);
+
+  delay(150);
+  Firebase.updateNodeSilent(firebasedata, DEVICE_NN + PATH_DATA  + "/State" + timestamp_string, json_state);
+  double LAST_OP_TIME = double(millis() / 1000);
+  Firebase.setDouble(firebasedata, DEVICE_NN + PATH_CONFIGURATION_STATUS + "LastOP_TIME", LAST_OP_TIME );
+
+
+  Firebase.setString(firebasedata, DEVICE_NN + PATH_CONFIGURATION_STATUS + "WiFi_rssi", String(WiFi.RSSI()));
+
+
+  //Serial.print("LastUpload: ");
+  //Serial.println(auxiliar_string);
+
+  Firebase.setString(firebasedata, DEVICE_NN + PATH_CONFIGURATION_STATUS + "LastUpload", auxiliar_string );
+
+  delay(150);
+
+  //Firebase.updateNodeSilent(firebasedata, DEVICE + "/Observer" + timestamp_string, json_observer);
+
+  
+
+
+  Firebase.setString(firebasedata, DEVICE_NN + PATH_CONFIGURATION_STATUS + "FireTimeStamp", timestamp_string2 );
+  
+
+  if (Start_or_Restart) {
+    Firebase.setString(firebasedata, DEVICE_NN + PATH_CONFIGURATION_STATUS + "LastRestart", auxiliar_string);
+    Start_or_Restart = 0;
+    Firebase.setString(firebasedata, DEVICE_NN + PATH_CONFIGURATION_STATUS + "Firmware", FIRMWARE_VER);
+    Firebase.setString(firebasedata, DEVICE_NN + PATH_CONFIGURATION_STATUS + "WifiSSID", WIFI_SSID_DEFAULT);
+  }
+
+  int real_sleep;
+  if ( !MODE_PRG) {
+    Firebase.setString(firebasedata, DEVICE_NN + PATH_CONFIGURATION_STATUS + "IP", "Nope");
+    real_sleep = real_sleep_time();
+    Serial.print("Real Sleep Time = ");
+    Serial.println(real_sleep);
+    Firebase.setInt(firebasedata, DEVICE_NN + PATH_CONFIGURATION_STATUS + "real_sleep", real_sleep);
+
+    Firebase.setInt(firebasedata,  DEVICE_NN + PATH_CONFIGURATION_STATUS + "NewConf", 0);
+
+    /*
+      if (GPS_CLOUD) {
+      //Serial.println("GPS_RQ a cero");
+      Firebase.setInt(firebasedata, DEVICE + PATH_CONFIGURATION_VALUES + "GPS_RQ", 0 );
+      }
+    */
+
+
+
+
+
+    WiFi.disconnect(true);
+    WiFi.mode(WIFI_OFF);
+
+    turn_modem_off();
+
+
+  }
+  else Firebase.setString(firebasedata, DEVICE_NN + PATH_CONFIGURATION_STATUS + "IP", String( WiFi.localIP().toString()));
+
+  beep.vbeep(200);
+  if (BEEP_EN) beep.vbeep(150);
+
+  if (WiFi.status() != WL_CONNECTED) Serial.println("Wi-Fi Disconnected");
+  else  Serial.println("Wi-Fi Still Connected\n");
+
+  Serial.println("OP_TIME_2: " + String(int(millis() / 1000)));
+
+  if (!MODE_PRG){
+    long start_time=millis();
+    String message=String(real_sleep);
+    int packetsize=0;    
+    while(millis()-start_time<1000){
+      sendMessage(message);
+    }
+    deepsleep(real_sleep-1);
+
+  } 
+  //start_server();
+
+  if (BEEP_EN) {
+    beep.vbeep(100);
+    delay(40);
+    beep.vbeep(100);
+  }
+}
+ 

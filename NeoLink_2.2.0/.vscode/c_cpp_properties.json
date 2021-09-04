@@ -3,8 +3,9 @@
         {
             "name": "Win32",
             "includePath": [
-                "C:/Users/vince/Documents/Arduino/libraries/**",
-                "C:/Users/Ernesto Bazàn/Documents/Arduino/libraries/**",
+                //"C:/Users/vince/Documents/Arduino/libraries/**",
+                //"C:/Users/Ernesto Bazàn/Documents/Arduino/libraries/**",
+                "C:/Program Files (x86)/Arduino/libraries/**",
                 "D:/Arduino/libraries/**"
                        
             ],
