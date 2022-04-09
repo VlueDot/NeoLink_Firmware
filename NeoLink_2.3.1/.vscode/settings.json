@@ -1,0 +1,15 @@
+{   
+   
+
+    "C_Cpp.errorSquiggles": "Disabled",
+    "files.associations": {
+        "cmath": "cpp",
+        "xlocale": "cpp",
+        "xstring": "cpp",
+        "xutility": "cpp",
+        "string": "cpp"
+    },
+    "C_Cpp.intelliSenseEngineFallback": "Disabled",
+    "arduino.disableIntelliSenseAutoGen": true,
+    "C_Cpp.intelliSenseEngine": "Default"
+}
