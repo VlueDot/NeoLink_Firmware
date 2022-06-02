@@ -1,0 +1,22 @@
+{
+    "configurations": [
+        {
+            "name": "Win32",
+            "includePath": [
+                "C:/Program Files (x86)/Arduino/libraries/**",
+                "C:/Program Files (x86)/Arduino/hardware/arduino/avr/libraries/**",
+                "C:/Users/Eduardo/AppData/Local/Arduino15/packages/Heltec-esp32/hardware/esp32/0.0.5/libraries/**",
+                "C:/Users/Eduardo/AppData/Local/Arduino15/packages/Heltec-esp32/hardware/esp32/0.0.5/tools/sdk/include/**"
+            ],
+            "defines": [
+                "_DEBUG",
+                "UNICODE",
+                "_UNICODE"
+                
+            ],
+            "intelliSenseMode": "windows-gcc-x64",
+            "forcedInclude": []
+        }
+    ],
+    "version": 4
+}
