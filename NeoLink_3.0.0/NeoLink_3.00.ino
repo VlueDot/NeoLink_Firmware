@@ -953,9 +953,17 @@ void Update_Local_Info_Chip(vprint print, int update_local_info_flag){
 //Verifica que se encuentre el tipo de equipo en la eeprom no sea XX o vacio. Si lo es descarga la Local Info y guarda en la eeprom. 
 //verifica la que la bandera update_local_info_chip se encuentre en 1 para descargar nuevamente la data
 
-for( int i = 0; i <= 12 ; i++ ) SN_HEADER [i] = EEPROM.read (i);
+print.logq("Checking Local Info: ");
 
-print.logq(SN_HEADER);
+for( int i = 0; i <= 3 ; i++ ) SN_HEADER [i] = EEPROM.read (i);
+
+print.logqq("SN_HEADER in EEPROM is: ", SN_HEADER);
+
+SN_HEADER [0] != EEPROM.write('X');
+EEPROM.commit();
+
+print.logqq("SN_HEADER in EEPROM is: ", SN_HEADER);
+
 
 
 
