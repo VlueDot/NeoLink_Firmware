@@ -662,6 +662,12 @@ RTC_DATA_ATTR int8_t Stage = 1;
 RTC_DATA_ATTR float SLEEP_TIME_modem;
 int SLEEP_TIME_STAGE_1 = 18;
 
+
+RTC_DATA_ATTR int update_local_info_flag ;
+int update_config_flag ;
+int local_update_firmware;
+int global_update_firmware;
+
 // to make temporary storage for the average
 
 RTC_DATA_ATTR float MA_port1_G_1[3] = {0,0,0};
@@ -734,14 +740,14 @@ bool Comparator(String msg);
 void sendDeepSleep();
 String Transform_Variables(String msg,int n_var,int Port_Active);
 void LoRa_Communication();
-void sendd();
+void sendd(vprint print);
 
 
 String httpGETRequest(const char* serverName);
 void setClock();
 String getValue(String data, char separator, int index);
 void send_cloud_NN(String sms);
-void sendd();
+
 //--------------------------------------------------------
 //--------------------------------------------------------
 //--------------------------------------------------------
@@ -821,10 +827,7 @@ void setup() {
 
   else if (Stage == 2) {
   // Descargar le Local Serial Number. Verificar si hay nuevo Firmware. Descargar nueva configuracion. 
-    int update_local_info_flag ;
-    int update_config_flag ;
-    int local_update_firmware;
-    int global_update_firmware;
+    
     
     
 
@@ -963,12 +966,16 @@ print.logq(SN_HEADER);
 
 
 
+
+
+
+
 }
 
 int check_WiFi(vprint print, int millis_delay){
   int WiFi_HW_Status = 0;
   print.logq("Checking WiFi Modem Status");
-  delay(time_delay);
+  delay(millis_delay);
   WiFi_HW_Status = digitalRead(PIN_WIFI_STATUS);
 
   if(WiFi_HW_Status) print.logqq("WiFi is already ON");
@@ -1026,7 +1033,7 @@ void starting_wifi(vprint print) {
       }
       if (WiFi.status() == WL_CONNECTED) {
 
-        print.logqq("IP: ", WiFi.localIP());
+        print.logqq("IP: ", String(WiFi.localIP()));
 
         Firebase.begin(FIREBASE_HOST, FIREBASE_AUTH);
         Firebase.reconnectWiFi(true);
@@ -1046,7 +1053,7 @@ void starting_wifi(vprint print) {
           Serial.println("Nothing to do. See ya.. ");
           Stage = 0;
 
-           deepsleep(1);
+           deepsleep(1,print);
         }
 
        
@@ -1143,7 +1150,7 @@ void get_LOCAL_SN(){
 
 
 //------------------------------------------------------------------
-void check_registered() {
+void check_registered(vprint print) {
   if (!wifi_conf_isSet) wifi_conf_isSet = setting_wifi();
   if ( WiFi.status() != WL_CONNECTED) starting_wifi();
   //if ( WiFi.status() != WL_CONNECTED) starting_wifi();
@@ -1174,7 +1181,7 @@ void check_registered() {
       else Stage = 0;
       */
       Stage = 0;
-      deepsleep(UNREGISTERED_TIME);
+      deepsleep(UNREGISTERED_TIME,print);
     } else {
       //Serial.println(" Device " + SN + "..Registered");
       Serial.println(" Device " + SN + "..Registered");
@@ -1251,7 +1258,7 @@ void check_registered() {
       time_rep ++;
       Serial.print("Time obtained error. Try: ");
       Serial.println(time_rep);
-      if (time_rep > 4) deepsleep(1);
+      if (time_rep > 4) deepsleep(1, print);
     }
     Serial.println(&timeinfo, "%A, %B %d %Y %H:%M:%S");
 
@@ -1358,7 +1365,7 @@ void check_registered() {
       WiFi.mode(WIFI_OFF);
       Start_or_Restart = 0;
       turn_modem_off();
-      deepsleep(real_sleep_time());
+      deepsleep(real_sleep_time(),print);
     }
     else Serial.println("\n Continue to measuring..");
 
@@ -2172,7 +2179,7 @@ void get_ports_sensor() {
 }
 //------------------------------------------------------------------
 
-void moving_average_sensor() {
+void moving_average_sensor(vprint print) {
   
   if (Port1_Active) {
     if (port1_type.equals("g") ) {
@@ -2307,7 +2314,7 @@ void moving_average_sensor() {
 
 }
 
-void get_gps() {
+void get_gps(vprint print) {
 
   char message[200];
   int8_t divider;
@@ -2350,7 +2357,7 @@ void get_gps() {
         }
         else {
           Serial.println("Unexpected answer.")  ;
-          deepsleep(100);
+          deepsleep(100,print);
         }
 
 
@@ -2853,7 +2860,7 @@ void NodeExistance() {
       json_default_nodes.set(PATH_CONFIGURATION_STATUS + "Firmware", FIRMWARE_VER);
       json_default_nodes.set(PATH_CONFIGURATION_STATUS + "GPS/LAT", LATITUDE);
       json_default_nodes.set(PATH_CONFIGURATION_STATUS + "GPS/LONG", LONGITUDE);
-      json_default_nodes.set(PATH_CONFIGURATION_STATUS + "Hardware_ver", HARDWARE_VER);
+      json_default_nodes.set(PATH_CONFIGURATION_STATUS + "Hardware_version", HARDWARE_VERSION);
       json_default_nodes.set(PATH_CONFIGURATION_STATUS + "IP", "None");
       json_default_nodes.set(PATH_CONFIGURATION_STATUS + "LastOP_TIME", 0);
       json_default_nodes.set(PATH_CONFIGURATION_STATUS + "LastUpload", "NaN");
@@ -3130,7 +3137,7 @@ int FirmwareCheck() {
       else {
         Serial.println("[HTTP] JSON OK");
 
-        cJSON *device = cJSON_GetObjectItemCaseSensitive(json, HARDWARE_VER);
+        cJSON *device = cJSON_GetObjectItemCaseSensitive(json, HARDWARE_VERSION);
 
         if (device == NULL) {
           printf("There is no any FW for this HW version. Aborting...\n");
@@ -3780,7 +3787,7 @@ void  send_cloud_NN(String sms, vprint print){
     if (SENSOR_P2) p2_depth_err = DEPTH2 == 0;
     if (SENSOR_P3) p3_depth_err = DEPTH3 == 0;
     if (SENSOR_P4) p4_depth_err = DEPTH4 == 0;
-    if (p1_depth_err || p2_depth_err || p3_depth_err || p4_depth_err) deepsleep(1);
+    if (p1_depth_err || p2_depth_err || p3_depth_err || p4_depth_err) deepsleep(1,print);
     Serial.println();
   }
  
@@ -3822,7 +3829,7 @@ void  send_cloud_NN(String sms, vprint print){
     time_rep ++;
     Serial.print("Time obtained error. Try: ");
     Serial.println(time_rep);
-    if (time_rep > 4) deepsleep(1);
+    if (time_rep > 4) deepsleep(1,print);
   }
 
 
@@ -3903,7 +3910,7 @@ void  send_cloud_NN(String sms, vprint print){
           time_rep ++;
           Serial.print("Time obtained error. Try: ");
           Serial.println(time_rep);
-          if (time_rep > 4) deepsleep(1);
+          if (time_rep > 4) deepsleep(1,print);
         }
 
 
@@ -3955,7 +3962,7 @@ void  send_cloud_NN(String sms, vprint print){
 }
 
 
-void sendd(){
+void sendd(vprint print){
 
   check_WiFi();
   Firebase.begin(FIREBASE_HOST, FIREBASE_AUTH);
@@ -4088,7 +4095,7 @@ void sendd(){
     long_mess = 0;
     memset(sensado,0,300);
     //beep.vbeep(1000);
-    deepsleep(real_sleep-1);
+    deepsleep(real_sleep-1,print);
   }
   else {
     cantNN_send++;
