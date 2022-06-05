@@ -1,4 +1,5 @@
-// Compatiblee con Peripheral v1.0
+// Compatiblee con Peripheral v2.0.0
+// V3.0.0 Date 02 Jun 22 by V.R 
 
 
 
@@ -6,9 +7,11 @@
 
 
 //------------- OTA ------------------------------------------------
-//#include <WebServer.h>
-//#include <ESPmDNS.h>
-//#include <Update.h>
+
+#include <WiFiClient.h>
+#include <WebServer.h>
+#include <ESPmDNS.h>
+#include <Update.h>
 //------------- OTA HTTPS ------------------------------------------------
 
 //#include <HTTPClient.h>
@@ -50,17 +53,22 @@
 
 //_____________________________________________________________________//
 //                                                                      //
-//                  NEOLINK                                       //                                                                      //
+//                  NEOLINK - AIDA                                      //                                                                      //
 //______________________________________________________________________//
 
-const String DEVICE_TYPE = "NeoLink";
-const String DEVICE_HEADER = "NL";
-String SN = "XX0000-0000";
-const String FIRMWARE_VER = "2.3.1";
-//const double BUILT = 552;
-const char* HARDWARE_VER = "2.0";
+const String FIRMWARE_VER = "3.0.0";
 
-#define FIRMWARE_MODE 'DEV2.2'
+const String DEVICE_TYPE = "NeoLink";
+const char* DEVICE_HEADER = "NL";
+const char* HARDWARE_VERSION = "03";
+String SN_HEADER;
+String SN_CORRELATIVE ;
+String DATE_CORRELATIVE;
+String SN;
+
+#define FIRMWARE_MODE 'DEV'
+
+RTC_DATA_ATTR int8_t HARDWARE_AVAILABLE = 0;
 
 #if FIRMWARE_MODE == 'PRO'
   #define FIREBASE_HOST "https://neolink-934b4.firebaseio.com"
@@ -68,45 +76,14 @@ const char* HARDWARE_VER = "2.0";
   #define UPDATE_JSON_URL  "https://firmware-neolink.s3-sa-east-1.amazonaws.com/firmware_pro.json"
   const String WIFI_SSID_DEFAULT = "LINUX5"; //modem default
   const String WIFI_PSSWD_DEFAULT = "1a23456789abc";
-  byte localAddress = 0xBB; //address of this device.
-  byte destination = 0x01; //destination to send to.
+ 
 
-  #elif FIRMWARE_MODE == 'PRO-DEV'
-  #define FIREBASE_HOST "https://neolink-934b4.firebaseio.com"
-  #define FIREBASE_AUTH "IroB3fdbcPb9vxPlJKDJcqmfJgs0KouJGe0sUBKN"
+#elif FIRMWARE_MODE == 'DEV'
+  #define FIREBASE_HOST "https://aidadev-71837-default-rtdb.firebaseio.com/"
+  #define FIREBASE_AUTH "RbsWJ3F5EsLGLvpRefgTeyGQhEFHFp5pJfECurTE"
   #define UPDATE_JSON_URL  "https://firmware-neolink.s3-sa-east-1.amazonaws.com/firmware_pro.json"
-  const String WIFI_SSID_DEFAULT = "Rruiz 2.4GHz"; //modem default
-  const String WIFI_PSSWD_DEFAULT = "1a23456789abc";
-  byte localAddress = 0xBB; //address of this device.
-  byte destination = 0x01; //destination to send to.
-
- #elif FIRMWARE_MODE == 'DEV'
-  #define FIREBASE_HOST "https://neolink-b2f81-default-rtdb.firebaseio.com"
-  #define FIREBASE_AUTH "P2aDr6F6P1XZQ3zc7k4ABuPBT9o5szLwFHphsqZt"
-  #define UPDATE_JSON_URL  "https://test-firmware-neolink.s3.us-east-2.amazonaws.com/firmware_dev.json"
-  const String WIFI_SSID_DEFAULT = "LINUX1";//Ernesto29-4G//HUAWEI-2.4G-3N8//LINUX1
-  const String WIFI_PSSWD_DEFAULT = "123456789abc";//Roco1234//KC88F3TN//123456789abc  
-  byte localAddress = 0xBB; //address of this device.
-  byte destination = 0x01; //destination to send to.
-
-#elif FIRMWARE_MODE == 'DEV2.2'
-  #define FIREBASE_HOST "https://neolink-b2f81-default-rtdb.firebaseio.com"
-  #define FIREBASE_AUTH "P2aDr6F6P1XZQ3zc7k4ABuPBT9o5szLwFHphsqZt"
-  #define UPDATE_JSON_URL  "https://test-firmware-neolink.s3.us-east-2.amazonaws.com/firmware_dev.json"
-  const String WIFI_SSID_DEFAULT = "LINUX5";//Rruiz 2.4GHz//BandSteering
-  const String WIFI_PSSWD_DEFAULT = "1a23456789abc";//1a23456789abc//A543PR4G
-  byte localAddress = 0xBB; //address of this device.
-  byte destination = 0x01; //destination to send to.
-
-
-#elif FIRMWARE_MODE == 'DEV2.1'
-  #define FIREBASE_HOST "https://neolink-934b4.firebaseio.com"
-  #define FIREBASE_AUTH "IroB3fdbcPb9vxPlJKDJcqmfJgs0KouJGe0sUBKN"
-  #define UPDATE_JSON_URL  "https://firmware-neolink.s3-sa-east-1.amazonaws.com/firmware_pro.json"
-  const String WIFI_SSID_DEFAULT = "LINUX1";
-  const String WIFI_PSSWD_DEFAULT = "123456789abc";
-  byte localAddress = 0xBB; //address of this device.
-  byte destination = 0x01; //destination to send to.
+  const String WIFI_SSID_DEFAULT = "BandSteering";
+  const String WIFI_PSSWD_DEFAULT = "A543PR4G";
 
 #endif
 
@@ -141,6 +118,223 @@ const char* ca = \
                 "yLyKQXhw2W2Xs0qLeC1etA+jTGDK4UfLeC0SF7FSi8o5LL21L8IzApar2pR/\n" \
                 "-----END CERTIFICATE-----\n" ;
 
+
+char* log1 = 
+  "<script>t=document.createElement('div');"
+  "t.appendChild( document.createElement('br').appendChild(document.createTextNode('hola perro2')));"
+  "document.body.appendChild(t)</script>";
+
+const char* serverIndex =
+"<body onload = loadlog()>"
+  "<img src='https://static.wixstatic.com/media/5ab796_d078782c657b49f485a897ef2457a084~mv2.png/v1/fill/w_118,h_116,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/IMG_3641_PNG.png' style='vertical-align:middle'>"
+  "<img src='https://static.wixstatic.com/media/5ab796_bdead9c6276049e3afe6ddc5ea2080e5~mv2.png' height='55' style='vertical-align:middle'>"
+
+ "<div><b> Greenbird is watching you! </b> </div>"
+  "<div><br> Please, select a .ino </div>"
+  "<script src='https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js'></script>"
+  "<form method='POST' action='#' enctype='multipart/form-data' id='upload_form'>"
+  "<input type='file' name='update'>"
+  "<input type='submit' value='Update and Restart'>"
+  "</form>"
+  "<div id='prg'>progress: 0%</div>"
+  "<div><br> Or use this options </div>"
+  "<a  href=\"/quickRestart\"><button  name=\"quickRestart\">Quick Restart and reload</button></a>"
+  "<a  href=\"/HWReset\"><button  name=\"HWReset\">Reset by Hardware </button></a><br>"
+  "<a  href=\"/Exit_PRG_Mode\"><button  name=\"Exit_PRG_Mode\">Exit PRG_MODE</button></a>"
+  "<a  href=\"/Intense_Mode\"><button  name=\"Intense_Mode\">Modo Intenso</button></a>"
+  "<button type=\"button\" onclick=\"loadlog()\"> Get_data</button>"
+
+  
+  "<div><br><b>Read data: </b><br></div>"
+  "<div><p id='log'></p></div>"
+
+
+  "<script>"
+    "let count=0;"
+    "function loadlog(){"
+    "var xhttp = new XMLHttpRequest();"
+    "xhttp.open('GET', '/log', false);"
+    "xhttp.send();"
+     "if (xhttp.readyState == 4 && xhttp.status == 200){"
+      "count++;"
+      "t=document.createElement('pre');"
+      "t.setAttribute('id',count);"
+      "t.appendChild( document.createElement('br').appendChild(document.createTextNode(xhttp.responseText)));"
+      "document.body.appendChild(t)"
+    " }"    
+   "}"
+   
+  "</script>"
+
+  "<script>"
+  "$('form').submit(function(e){"
+  "e.preventDefault();"
+  "var form = $('#upload_form')[0];"
+  "var data = new FormData(form);"
+  " $.ajax({"
+  "url: '/update',"
+  "type: 'POST',"
+  "data: data,"
+  "contentType: false,"
+  "processData:false,"
+  "xhr: function() {"
+  "var xhr = new window.XMLHttpRequest();"
+  "xhr.upload.addEventListener('progress', function(evt) {"
+  "if (evt.lengthComputable) {"
+  "var per = evt.loaded / evt.total;"
+  "$('#prg').html('progress: ' + Math.round(per*100) + '%');"
+  "}"
+  "}, false);"
+  "return xhr;"
+  "},"
+  "success:function(d, s) {"
+  "console.log('success!')"
+  "},"
+  "error: function (a, b, c) {"
+  "}"
+  "});"
+  "});"
+  "</script>"
+  
+  "</body>";
+
+
+//New functions v3
+
+
+String string_Log="";
+String tlog ="";
+
+class vprint{
+
+public: 
+
+
+void logw(String e){
+  String str;
+  str.concat(millis());
+  str.concat(": ");
+  str.concat(e);
+  string_Log.concat(str);
+  Serial.print(str);
+}
+
+void logq(String e){
+  String str;
+  str.concat(millis());
+  str.concat(": ");
+  str.concat(e);
+  str.concat("\n");
+  string_Log.concat(str);
+  Serial.print(str);
+}
+
+void logq(int e){
+  String str;
+  str.concat(millis());
+  str.concat(": ");
+  str.concat(String(e));
+  str.concat("\n");
+  string_Log.concat(str);
+  Serial.print(str);
+}
+
+void logq(double e){
+  String str;
+  str.concat(millis());
+  str.concat(": ");
+  str.concat(String(e));
+  str.concat("\n");
+  string_Log.concat(str);
+  Serial.print(str);
+}
+
+
+void logq(String text , String e){
+  String str;
+  str.concat(millis());
+  str.concat(": ");
+  str.concat(text);
+  str.concat(e);
+  str.concat("\n");
+  string_Log.concat(str);
+  Serial.print(str);
+}
+
+void logq(String text , int e){
+  String str;
+  str.concat(millis());
+  str.concat(": ");
+  str.concat(text);
+  str.concat(String(e));
+  str.concat("\n");
+  string_Log.concat(str);
+  Serial.print(str);
+}
+
+void logq(String text , double e){
+  String str;
+  str.concat(millis());
+  str.concat(": ");
+  str.concat(text);
+  str.concat(String(e));
+  str.concat("\n");
+  string_Log.concat(str);
+  Serial.print(str);
+}
+
+void logqq(String e){
+  String str;
+  str.concat("\t");
+  str.concat(millis());
+  str.concat(": ");
+  str.concat(e);
+  str.concat("\n");
+  string_Log.concat(str);
+  Serial.print(str);
+}
+
+void logqq(String text , String e){
+  String str;
+  str.concat("\t");
+  str.concat(millis());
+  str.concat(": ");
+  str.concat(text);
+  str.concat(e);
+  str.concat("\n");
+  string_Log.concat(str);
+  Serial.print(str);
+}
+
+void logqq(String text , int e){
+  String str;
+  str.concat("\t");
+  str.concat(millis());
+  str.concat(": ");
+  str.concat(text);
+  str.concat(String(e));
+  str.concat("\n");
+  string_Log.concat(str);
+  Serial.print(str);
+}
+
+void logqq(String text , double e){
+  String str;
+  str.concat("\t");
+  str.concat(millis());
+  str.concat(": ");
+  str.concat(text);
+  str.concat(String(e));
+  str.concat("\n");
+  string_Log.concat(str);
+  Serial.print(str);
+}
+
+};
+
+
+
+
 // receive buffer
 char rcv_buffer[300];
 
@@ -162,13 +356,13 @@ const byte esp32_TX___ard_RX = 17;
 #define TEMP_EN 25
 #define RTC_IO 33
 #define TOUCH_T9 32
-#define AUX_IN 39
+#define PIN_WIFI_STATUS 39
 #define TEMP_VALUE 33
 #define SOLAR_VALUE 37
 #define BAT_VALUE 36
 
 #define SIM_ON 4
-#define FORCED_ATMEGA_RESET 2
+#define ATMEGA_FORCED_RESET_PIN 2
 
 
 // Serials----------------------------------------------------------
@@ -381,7 +575,7 @@ RTC_DATA_ATTR int8_t INCOMPATIBILIDAD_FIRMWARE_ERROR = 0;
 RTC_DATA_ATTR int8_t Start_or_Restart = 1;
 RTC_DATA_ATTR int8_t Update_LocalSN_Flag = 0;
 RTC_DATA_ATTR int8_t NewConf_flag = 1;
-RTC_DATA_ATTR int8_t battery_hysteresis = 0;
+RTC_DATA_ATTR int8_t battery_available = 1; 
 RTC_DATA_ATTR int8_t is_registered = 0;
 RTC_DATA_ATTR int8_t WIFI_EN = 1;
 RTC_DATA_ATTR int8_t wifi_default = 1;
@@ -437,6 +631,8 @@ String message_aux;
 String sms_config;
 bool error_message = false;
 
+const String flag_adrr = "/Services_controllers_Flags/Devices";
+
 /*
   RTC_DATA_ATTR int8_t day_in_mem=1;
   RTC_DATA_ATTR int8_t month_in_mem=1;
@@ -460,11 +656,11 @@ RTC_DATA_ATTR float N_END_HOUR = 4;    //same here
 
 RTC_DATA_ATTR char WIFI_SSID[30];
 RTC_DATA_ATTR char WIFI_PSSWD[30];
-RTC_DATA_ATTR float BAT_L = 3.25;
-RTC_DATA_ATTR float BAT_H = 3.60;
-RTC_DATA_ATTR int8_t prg_iteration = 0;
+RTC_DATA_ATTR float BAT_L = 3.2;
+RTC_DATA_ATTR float BAT_H = 3.4;
+RTC_DATA_ATTR int8_t Stage = 1;
 RTC_DATA_ATTR float SLEEP_TIME_modem;
-int SLEEP_TIME_PRE = 18;
+int SLEEP_TIME_STAGE_1 = 18;
 
 // to make temporary storage for the average
 
@@ -477,12 +673,7 @@ RTC_DATA_ATTR float MA_port1_G_3[3] = {0,0,0};
 RTC_DATA_ATTR float MA_port2_G_3[3] = {0,0,0};
 RTC_DATA_ATTR float MA_port3_G_3[3] = {0,0,0};
 RTC_DATA_ATTR float MA_port4_G_3[3] = {0,0,0};
-//Lora communication variables 
-String incoming;               // incoming message
-String outgoing; //outgoing message
-byte msgCount=0;        // count of outgoing messages
-long lastSendTime=0;    // last send time
-int interval = 2000;    // interval between sends
+
 
 //------------------  -----------------------------------  -----------------------------------  -----------------------------------  -----------------
 //------------------  -----------------------------------  -----------------------------------  -----------------------------------  -----------------
@@ -497,8 +688,6 @@ int checking_battery();
 int check_WiFi();
 
 void turn_modem_on();
-
-
 
 int16_t setting_wifi();
 void Upload(String message, int valo);
@@ -535,7 +724,7 @@ void get_neolink_status();
 void get_neonodes_signals();
 
 void compatibility_error();
-void FORCED_RESET_TASK();
+void force_hardware_reset(vprint print);
 void config_LoRa0();
 void sendMessage(String outgoing);
 String onReceive(int packetSize);
@@ -556,6 +745,10 @@ void sendd();
 //--------------------------------------------------------
 //--------------------------------------------------------
 //--------------------------------------------------------
+
+
+
+//--------------------------------------------------------
 void setup() {
 
   pinMode(ARDUINO_RESTART, OUTPUT);
@@ -573,53 +766,97 @@ void setup() {
   pinMode(SIM_ON, OUTPUT);
   digitalWrite(SIM_ON, HIGH);
 
-  pinMode(FORCED_ATMEGA_RESET, OUTPUT);
+  pinMode(ATMEGA_FORCED_RESET_PIN, OUTPUT);
+
+  pinMode(PIN_WIFI_STATUS, INPUT);
 
  
+  //SE DEBE CREAR UNA VARIABLE PARA HABILITAR LA PANTALLA?
 
   //Heltec.begin(false /*DisplayEnable Enable*/, false /*Heltec.LoRa Disable*/, false /*Serial Enable*/, false /*PABOOST Enable*/, BAND /*long BAND*/);
   //delay(1000);
   
   Serial.begin(115200);
+  vprint print;
+
   EEPROM.begin(150);
   
+  Serial.println("___________________________________________________");
+  print.logq("Greenbird AG - AIDA | NeoLink Firmware Version: ", FIRMWARE_VER);
+
+  if (Start_or_Restart) beep.vbeep(250);
 
   chipid = ESP.getEfuseMac(); //The chip ID is essentially its MAC address(length: 6 bytes).
   chipid_str = String((uint16_t)(chipid >> 32), HEX) + String((uint32_t)chipid, HEX);
+  print.logq("Chip ID: ", chipid_str);
   
   
+  if(HARDWARE_AVAILABLE) print.logq("Running with Hadware available");
+  else  print.logq("Running without Hadware. Just ESP32 board.");
+  
+  if (Stage == 1) {
+    //verificar bateria, resetear arduino?, verificar si el wifi esta encendido y encenderlo. Cambiar a etapa 2
 
-  if (prg_iteration == 0) {
-    Serial.println("\n----------------------------------");
-    Serial.println("[STEP 1]: ");
-    if (!checking_battery()) 
-     {
-      Serial.println(" Not enought energy. Shutting down until battery_hysteresis ");
-      deepsleep(POWERLESS_TIME);
+    print.logq("[STAGE 1]: ");
+    if (!checking_battery(print)) deepsleep(POWERLESS_TIME,print);
 
-    }
-    
-    //physical forced reset Atmega328pu
-    Serial.println("[Prevention] Physical Atmega328PU forced resetting.");
-    
-    digitalWrite(FORCED_ATMEGA_RESET, HIGH);
-    delay(1000);
-    digitalWrite(FORCED_ATMEGA_RESET, LOW);
+    //physical forced reset Atmega328pu. Why?
+    atmega_force_reset(print);
 
-    prg_iteration = 9;
-    if (!check_WiFi())  turn_modem_on();
     
-    if (Start_or_Restart) beep.vbeep(250);
-    if(FIRMWARE_MODE == 'DEV'||FIRMWARE_MODE == 'DEV2.2'||FIRMWARE_MODE == 'DEV2.1') deepsleep(18);
-    deepsleep(SLEEP_TIME_PRE);
+    if (!check_WiFi(print,3000)) turn_modem_on(print);
+    
+    
+
+    Stage = 2; //Habilito el siguiente paso
+
+
+    if(FIRMWARE_MODE == 'DEV') deepsleep(10,print);
+    else deepsleep(SLEEP_TIME_STAGE_1,print);
 
   }
 
-  else if (prg_iteration == 9) {
-    Serial.println("[STEP 2]:" );//principal code
+  
+
+
+  else if (Stage == 2) {
+  // Descargar le Local Serial Number. Verificar si hay nuevo Firmware. Descargar nueva configuracion. 
+    int update_local_info_flag ;
+    int update_config_flag ;
+    int local_update_firmware;
+    int global_update_firmware;
+    
+    
+
+    print.logq("[STEP 2]:" );
     ArdSerial.begin(57600);
+
+    if(!check_WiFi(print,1)) starting_wifi(print);
+
+    Update_Local_Info_Chip(print, update_local_info_flag);
+
+    Firebase.getInt(firebasedata, "Services_controllers_Flags/Devices/" + SN + "/local_update_firmware"); 
+    local_update_firmware = firebasedata.intData();
+    Firebase.getInt(firebasedata, "Services_controllers_Flags/Devices/" + SN + "/update_config_flag"); 
+    update_config_flag = firebasedata.intData();
+    Firebase.getInt(firebasedata, "Services_controllers_Flags/Devices/" + SN + "/update_local_info_flag"); 
+    update_local_info_flag = firebasedata.intData();
+    
+
+    
+    
+    
+
+
+    
+    
+    
+    
  
-    //beep.vbeep(2000);
+
+  }
+
+    /*
 
     if(Update_LocalSN_Flag || char(EEPROM.read(0)) != 'N' || char(EEPROM.read(1)) != 'L') get_LOCAL_SN();
     else{
@@ -662,7 +899,7 @@ void setup() {
       get_ports_sensor2();
       get_environment_sensor();
       get_neolink_status();
-      if(cant_NN != 0)  prg_iteration = 4;
+      if(cant_NN != 0)  Stage = 4;
       else  {
         send_cloud_NN(sms_neolink);
         sendd();
@@ -671,20 +908,22 @@ void setup() {
 
   }
 
-  else if(prg_iteration == 4){
+
+
+  else if(Stage == 4){
     LoRa_Communication();
     Serial.println("cont_prg" + cont_prg);
     if (cantNN_receive == cant_NN)  {
-      prg_iteration = 7;
+      Stage = 7;
 
     }
     if(cont_prg == 3) {
-      prg_iteration = 0;
+      Stage = 0;
       deepsleep(20);
     }
   }
 
-  else if(prg_iteration == 7){
+  else if(Stage == 7){
     String message_send = getValue(sensado,'#',cantNN_send);
     Serial.println("message_send: " + message_send);
 
@@ -693,87 +932,174 @@ void setup() {
     sendd();
     check_configuration(DEVICE);   
   }
+
+  */
 }
 
 void loop() {
   if ( MODE_PRG) {
-    //server.handleClient();
-    //delay(1);
-    Serial.println("No MODE_PRG defined in this version");
-    deepsleep(1);
-  }
-  //if (start_MODE_PRG - millis() >=300000) deepsleep(1);
-  deepsleep(1);
+          //server.handleClient();
+          delay(1);
+         }
 }
 
 //---------------------------------------------------------
 
-int check_WiFi(){
-  //Serial.println("Checking WiFi Default as First Step... NOT IMPLEMENTET JET");
+void Update_Local_Info_Chip(vprint print, int update_local_info_flag){
 
-  Serial.println("Checking WiFi.. ");
-  pinMode(AUX_IN, INPUT);
-  digitalWrite(AUX_IN, HIGH);
-  delay(20);
-  float check_wifi;
-  check_wifi  = ReadVoltage(AUX_IN) ;
-  check_wifi = check_wifi * 0.0009063745019920318725099601594;
-  Serial.println("Wifi voltage: "+String(check_wifi));
-  digitalWrite(AUX_IN, LOW);
+//Verifica que se encuentre el tipo de equipo en la eeprom no sea XX o vacio. Si lo es descarga la Local Info y guarda en la eeprom. 
+//verifica la que la bandera update_local_info_chip se encuentre en 1 para descargar nuevamente la data
 
-  if (check_wifi < 0.5) return 0;
-  return 1;
+for( int i = 0; i <= 12 ; i++ ) SN_HEADER [i] = EEPROM.read (i);
+
+print.logq(SN_HEADER);
+
+
+
+
+
+
+
+
+
+
+}
+
+int check_WiFi(vprint print, int millis_delay){
+  int WiFi_HW_Status = 0;
+  print.logq("Checking WiFi Modem Status");
+  delay(time_delay);
+  WiFi_HW_Status = digitalRead(PIN_WIFI_STATUS);
+
+  if(WiFi_HW_Status) print.logqq("WiFi is already ON");
+  else print.logqq("WiFi is OFF.");
+
+  if(!HARDWARE_AVAILABLE) { 
+
+    print.logqq("Forcing return of WiFi_HW_Status as ON due hardware not available.");
+    print.logqq("No Turn Off is needed.");
+    return 1;
+
+  }
+
+  return WiFi_HW_Status;
+}
+
+void turn_modem_off(vprint print) {
+  print.logq("Turning Modem OFF");
+  digitalWrite(SIM_ON, HIGH);
+  delay(750);
+  digitalWrite(SIM_ON, LOW);
+  delay(2000);
+  print.logqq("Done.");
+
+}
+
+void turn_modem_on(vprint print) {
+
+
+
+  print.logq("Turning Modem ON.");
+  digitalWrite(SIM_ON, HIGH);
+  delay(1200);
+  digitalWrite(SIM_ON, LOW);
+  delay(2000);
+  print.logqq("Done.");
+
+
+}
+
+//------------------------------------------------------------------
+void starting_wifi(vprint print) {
+  int wifi_try = 1;
+  if (wifi_conf_isSet) {
+
+    print.logq("Starting WiFi:");
+
+    WiFi.begin(WIFI_SSID, WIFI_PSSWD);
+    
+    init_timestamp = millis();
+    while (1) {
+      while (WiFi.status() != WL_CONNECTED && millis() - init_timestamp < WIFI_TIME_LIMIT ) {
+        Serial.print(".");
+        delay(500);
+      }
+      if (WiFi.status() == WL_CONNECTED) {
+
+        print.logqq("IP: ", WiFi.localIP());
+
+        Firebase.begin(FIREBASE_HOST, FIREBASE_AUTH);
+        Firebase.reconnectWiFi(true);
+     
+        break;
+
+      }
+      else {
+
+        init_timestamp = millis();
+        WiFi.begin(WIFI_SSID, WIFI_PSSWD);
+        Serial.println("\n Enabling wifi: ERROR. Try: " + String(wifi_try));
+        wifi_try++;
+
+        if (wifi_try > 3) {
+
+          Serial.println("Nothing to do. See ya.. ");
+          Stage = 0;
+
+           deepsleep(1);
+        }
+
+       
+
+      }
+    }
+
+  }
+
 }
 
 
-int checking_battery() {
-  //if(FIRMWARE_MODE == 'DEV'||FIRMWARE_MODE == 'DEV2.2'||FIRMWARE_MODE == 'DEV2.1') return 1;
-  Serial.println("Checking Battery.. ");
+int checking_battery(vprint print) {
+  
+  print.logq("Checking Battery: ");
+
   pinMode(BAT_VALUE, INPUT_PULLDOWN);
-  pinMode(SOLAR_VALUE, INPUT);
+  pinMode(SOLAR_VALUE, INPUT_PULLDOWN);
 
   digitalWrite(BAT_SOLAR_EN, HIGH);
   delay(20);
+
   float solar_voltage_temp;
   float battery_voltage_temp;
+
   solar_voltage_temp  = ReadVoltage(SOLAR_VALUE) ;
-  
   battery_voltage_temp = ReadVoltage(BAT_VALUE) ;
-  //battery_voltage_temp = 2000;
 
   digitalWrite(BAT_SOLAR_EN, LOW);
-  if (battery_voltage <= 0 ) {
-    battery_voltage = battery_voltage_temp * 0.00182189 ;
-  }
-  if ( solar_voltage <= 0) {
-    solar_voltage = solar_voltage_temp * 0.003692945;
-  }
-  //Serial.print ("past solar_voltage: ");
-  //Serial.println (solar_voltage);
-  //Serial.print ("past battery_voltage: ");
-  //Serial.println (battery_voltage);
 
-  //solar_voltage = solar_voltage_temp*0.003692946  ;
-  solar_voltage = solar_voltage_temp*0.00395528142  ;
-  //solar_voltage = (solar_voltage_temp*0.002371486  + solar_voltage) / 2 ;
-  battery_voltage = (battery_voltage_temp * 0.00182189 + battery_voltage ) / 2 ;
+  if (battery_voltage <= 0 )battery_voltage = battery_voltage_temp;
+  if ( solar_voltage <= 0) solar_voltage = solar_voltage_temp ;
+    
+  battery_voltage = (battery_voltage_temp + battery_voltage ) / 2 ;
+  solar_voltage = (solar_voltage_temp + solar_voltage) / 2;
 
-  Serial.print (" solar_voltage: ");
-  Serial.println (solar_voltage);
-  Serial.print (" battery_voltage: ");
-  Serial.println (battery_voltage);
+  solar_voltage   = solar_voltage * 0.003692945;
+  print.logqq("Solar voltage: ", solar_voltage);
+
+  battery_voltage = battery_voltage * 0.00395528142;
+
+  if (battery_voltage <= BAT_L && battery_available ) battery_available = 0;
+  if (battery_voltage >= BAT_H && !battery_available ) battery_available = 1; 
 
 
-  if (battery_voltage < BAT_L && !battery_hysteresis ) {
-    battery_hysteresis = 1;
 
-  }
+  if (battery_available) print.logqq("Available energy. Battery Voltage: ", battery_voltage);
+  else print.logqq("Not enought energy. Shutting down. Battery Voltage: ", battery_voltage);
 
-  if (battery_voltage >= BAT_H && battery_hysteresis ) {
-    battery_hysteresis = 0;
-  }
+  if(!HARDWARE_AVAILABLE) battery_available = 1;
 
-  return !battery_hysteresis;
+  return battery_available;
+  
 }
 
 void get_LOCAL_SN(){
@@ -844,10 +1170,10 @@ void check_registered() {
       beep.vbeep(300);
       delay(30);
       beep.vbeep(100);
-      /*if (prg_iteration == 0) prg_iteration = 9;
-      else prg_iteration = 0;
+      /*if (Stage == 0) Stage = 9;
+      else Stage = 0;
       */
-      prg_iteration = 0;
+      Stage = 0;
       deepsleep(UNREGISTERED_TIME);
     } else {
       //Serial.println(" Device " + SN + "..Registered");
@@ -2350,106 +2676,12 @@ void get_neolink_status() {
 
 }
 
-//------------------------------------------------------------------
-
-void get_neonodes_signals() {
-
-  /* SPI.begin(SCK, MISO, MOSI, SS);
-    LoRa.setPins(SS, RST_LoRa, DIO0);
-    if (!LoRa.begin(BAND, false))Serial.println("Starting LoRa failed!\r\n");
-    else Serial.println("LoRa Failed"); */
-
-
-}
-
-
-
-void turn_modem_off() {
-  Serial.println("Turning Modem OFF");
-  digitalWrite(SIM_ON, HIGH);
-  delay(750);
-  digitalWrite(SIM_ON, LOW);
-  delay(2000);
-
-}
-
-void turn_modem_on() {
-  Serial.println("Turning Modem ON");
-  digitalWrite(SIM_ON, HIGH);
-  delay(1500);
-  digitalWrite(SIM_ON, LOW);
-  delay(2000);
-
-
-}
-
-
-
-//------------------------------------------------------------------
-void starting_wifi() {
-  int wifi_try = 1;
-  if (wifi_conf_isSet) {
-
-    //Serial.println(WIFI_SSID);
-    //Serial.println(WIFI_PSSWD);
-
-    WiFi.begin(WIFI_SSID, WIFI_PSSWD);
-    Serial.print("Conectando WiFi..");
-    init_timestamp = millis();
-    while (1) {
-      while (WiFi.status() != WL_CONNECTED && millis() - init_timestamp < WIFI_TIME_LIMIT ) {
-        Serial.print(".");
-        delay(500);
-      }
-      if (WiFi.status() == WL_CONNECTED) {
-        //Serial.println(millis() - init_timestamp);
-        Serial.print("\n IP: ");
-        Serial.println(WiFi.localIP());
-        //delay(500);
-        Firebase.begin(FIREBASE_HOST, FIREBASE_AUTH);
-        Firebase.reconnectWiFi(true);
-        //delay(1000);
-        break;
-
-      }
-      else {
-
-        init_timestamp = millis();
-        WiFi.begin(WIFI_SSID, WIFI_PSSWD);
-        Serial.println("\n Enabling wifi: ERROR. Try: " + String(wifi_try));
-        wifi_try++;
-
-        if (wifi_try > 3) {
-
-          Serial.println("Nothing to do. See ya.. ");
-          prg_iteration = 0;
-
-          /* beep.vbeep(250);
-            delay(20);
-            beep.vbeep(25);
-            delay(2);
-            beep.vbeep(25);
-            delay(2);
-            beep.vbeep(25);
-            delay(2);
-            beep.vbeep(25); */
-          //deepsleep(NO_WIFI);
-          deepsleep(1);
-        }
-
-        else {
 
 
 
 
-        }
 
-      }
-    }
 
-  }
-
-}
 
 String message_node(String name , float val){
   
@@ -2545,24 +2777,24 @@ int16_t real_sleep_time() {
 
 
   //Serial.print ("Modem wakeup = ");
-  SLEEP_TIME_modem = sleep_timee - SLEEP_TIME_PRE + 10;
+  SLEEP_TIME_modem = sleep_timee - SLEEP_TIME_STAGE_1 + 10;
   if (SLEEP_TIME_modem < 1) SLEEP_TIME_modem = 10; //+10
 
   //Serial.println (SLEEP_TIME_modem);
 
   Serial.print ("NeoLink wakeup = ");
-  Serial.println (SLEEP_TIME_PRE);
+  Serial.println (SLEEP_TIME_STAGE_1);
 
-  if (prg_iteration == 0) {
-    prg_iteration = 9;
-    return  SLEEP_TIME_PRE + SLEEP_TIME_modem + 10 ; //+10
+  if (Stage == 0) {
+    Stage = 9;
+    return  SLEEP_TIME_STAGE_1 + SLEEP_TIME_modem + 10 ; //+10
   }
   else if (cantNN_send < cant_NN){
-    prg_iteration = 7;
+    Stage = 7;
     return  SLEEP_TIME_modem;
   }
   else if (cantNN_send == cant_NN){
-    prg_iteration = 0;
+    Stage = 0;
     return  SLEEP_TIME_modem;
   }
 
@@ -3095,9 +3327,22 @@ void depth_request(String direc) {
 
 }
 
+void atmega_force_reset(vprint print){
+
+  print.logq("Forcing Atmega to reset.");
+
+  digitalWrite(ATMEGA_FORCED_RESET_PIN, HIGH);
+  delay(500);
+  digitalWrite(ATMEGA_FORCED_RESET_PIN, LOW);
+  delay(2000);
+
+  print.logqq("Reseting Atmega: Done.");
 
 
-void FORCED_RESET_TASK(){
+
+}
+
+void force_hardware_reset(vprint print){
 
     WiFi.disconnect(true);
     WiFi.mode(WIFI_OFF);
@@ -3106,10 +3351,7 @@ void FORCED_RESET_TASK(){
     unsigned long task_start_time;
     int i=0;
     //1. Reset Atmega328
-    digitalWrite(FORCED_ATMEGA_RESET, HIGH);
-    delay(500);
-    digitalWrite(FORCED_ATMEGA_RESET, LOW);
-    delay(2000);
+    atmega_force_reset(print);
 
     //2. Reset ESP32
     
@@ -3133,115 +3375,38 @@ void FORCED_RESET_TASK(){
     delay(1000);
 }
 
-void deepsleep(int time2sleep) {
-  //if (Start_or_Restart && prg_iteration==9 ) time2sleep=1;
+void deepsleep(int time2sleep, vprint print) {
+ 
   esp_sleep_enable_timer_wakeup(time2sleep * uS_TO_S_FACTOR);
-  Serial.println("Going to sleep for " + String(time2sleep) + " Seconds");
-  Serial.println();
-  //LoRa.end();
-  //LoRa.sleep();
+  print.logq("Going to sleep for " + String(time2sleep), " seconds");
+  
   delay(100);
   esp_deep_sleep_start();
 
 }
 
-void deepsleep_beep(int deepsleep_time, unsigned long beep_time){
-  Serial.println("Resetting.. ");
+void deepsleep_beep(int deepsleep_time, unsigned long beep_time, vprint print){
+  print.logq("Beep reset. ");
   beep.vbeep(beep_time);
-  deepsleep(deepsleep_time);
+  deepsleep(deepsleep_time,print);
   
 }
 
-void deepsleep_several_beep(int deepsleep_time, unsigned long beep_time, int times, int between){
+void deepsleep_several_beep(int deepsleep_time, unsigned long beep_time, int times, int between, vprint print){
   
   for(int i=0; i<= times; i++){
     beep.vbeep(beep_time);
     delay(between);
   }
  
-  deepsleep(deepsleep_time);
+  deepsleep(deepsleep_time,print);
   
 }
 
-void compatibility_error(){
-  Serial.println("[ERROR] FIRMWARE NO COMPATIBLE.");
-  deepsleep_several_beep(120, 500, 3, 1000); // seg, ms, times, ms
+void compatibility_error(vprint print){
+  print.logq("[ERROR] FIRMWARE NO COMPATIBLE.");
+  deepsleep_several_beep(120, 500, 3, 1000, print); // seg, ms, times, ms
 
-}
-void config_LoRa(){
-
-
-  Heltec.begin(false /*DisplayEnable Enable*/, true /*Heltec.Heltec.Heltec.LoRa Disable*/,
-               false /*Serial Enable*/, true /*PABOOST Enable*/, BAND /*long BAND*/);
-  LoRa.setTxPower(20,RF_PACONFIG_PASELECT_PABOOST);
-  /*
-  //register the receive callback.
-  LoRa.onReceive(onReceive);
-  //put the radio into receive mode.
-  LoRa.receive();
-  */
-
-}
-
-void sendMessage(String outgoing)
-{
-  Serial.println(outgoing);
-  LoRa.beginPacket();                   // start packet
-  LoRa.write(destination);              // add Neolink address
-  LoRa.write(localAddress);             // add Neonode address
-  LoRa.write(msgCount);                 // add message ID
-  LoRa.write(outgoing.length());        // add message length
-  LoRa.print(outgoing);                 // add message
-  LoRa.endPacket();                     // finish packet and send it
-  msgCount++;                           // increment message ID
-}
-
-String onReceive(int packetSize)
-{
-
-  if (packetSize == 0) return incoming;          // if there's no packet, return
-  
-  incoming="";
-  // read packet header bytes:
-  byte recipient = LoRa.read();          // recipient address
-  byte sender = LoRa.read();            // sender address
-  byte incomingMsgId = LoRa.read();     // incoming msg ID
-  byte incomingLength = LoRa.read();    // incoming msg length
-
-
-
-  while (LoRa.available())
-  {
-    incoming += (char)LoRa.read();
-  }
-
-  if (incomingLength != incoming.length())
-  {   // check length for error
-    Serial.println("error: message length does not match length");
-    return "";                             // skip rest of function
-  }
-
-  // if the recipient isn't this device or broadcast,
-  if (recipient != localAddress && recipient != 0xFF) {
-    Serial.println("This message is not for me.");
-    return "";                             // skip rest of function
-  }
-
-  // if message is for this device, or broadcast, print details:
-  Serial.println("Received from: 0x" + String(sender, HEX));
-  Serial.println("Sent to: 0x" + String(recipient, HEX));
-  Serial.println("Message ID: " + String(incomingMsgId));
-  Serial.println("Message length: " + String(incomingLength));
-  Serial.println("Message: " + incoming);
-  Serial.println("RSSI: " + String(LoRa.packetRssi()));
-  Serial.println("Snr: " + String(LoRa.packetSnr()));
-  Serial.println();
-  /*
-  if(incoming=="START" ){
-    sendMessage("1");
-  }
-  */
-  return incoming;
 }
 
 
@@ -3333,74 +3498,6 @@ bool Comparator(String msg){
   }
 }
 
-void LoRa_Communication(){
-  Serial.println("Entre a la funcion");
-
-  config_LoRa();
-  String sms;
-  String msg;
-  String eeprom;
-  int16_t msg_length;
-  String message="DATA";
-  int packetsize=0;
-  delay(500);
-
-  if(cantNN_receive <= cant_NN && !error_message){
-    eeprom = read_eeprom();
-    destination = 0XFF & (getValue(eeprom,'#',cantNN_receive*2+2)).toInt();//mejorar
-    Serial.println("destino= " + String(destination));
-  }
-  
-  long start_time=millis();
-  while(millis()-start_time<1000){
-    sendMessage(message);
-    Serial.println(message);
-  }
-  
-  message_aux = "";
-  int message_count = 0;
-  do{
-    if(sms=="Repeat") config_LoRa();
-    sms="";
-    sms=reciveBig();
-    message_count++;
-  } while(sms=="Repeat" && message_count<10);
-
-
-
-
-  if(sms=="Repeat" && message_count>=10){
-    error_message = true ;
-    //must_send = false;
-    prg_iteration = 4;
-    start_time=millis();
-    cont_prg++;
-    Serial.println("cont_prg" + cont_prg);
-    while(millis()-start_time<1500){
-      sendMessage("ERROR");
-      Serial.println("ERROR");
-    }
-  }
-  else{
-    error_message = false ;
-    sms=message_aux+sms;
-    cantNN_receive++;
-    //must_send = true;
-    Serial.println(sms);
-    //beep.vbeep(1000);
-    delay(4000);
-    sendDeepSleep();
-    //Upload(sms);
-    Serial.println("--1.5--");
-    sms_upload=sms + "#";
-    Serial.println("--2--");
-    for(int i=long_mess ; i<sms_upload.length() ; i++){
-      sensado[i] = sms_upload[i] ;
-    }
-    long_mess = sms_upload.length();
-  }
-  //sms="NN0000-0002$:/P1/V1:-920.8000:/P1/V2:20.0000_k_1$$$:/P4/V1:1736.1500:/P4/V2:19.9500:/P4/V3:0.5000%:/P4/VWC:0.0000:/P4/ApPer:0.3864:/P4/PorePer:80.3185:/P4/PoreCE:0.0000_g_1$SV$5.19$BV$3.77$iT_raw$-127.00$iT$-127.00$7.00$iT$-127.00$7.00$iT$-127.00$7.00$iT$-127.00$";
-}
 
 void sendDeepSleep(){
   int16_t sleep_timee;
@@ -3414,7 +3511,7 @@ void sendDeepSleep(){
     if (sleep_timee <= 0) sleep_timee = sleep_timee + int(N_SLEEP_TIME);
   }
 
-  SLEEP_TIME_modem = sleep_timee - SLEEP_TIME_PRE + 10;
+  SLEEP_TIME_modem = sleep_timee - SLEEP_TIME_STAGE_1 + 10;
   if (SLEEP_TIME_modem < 1) SLEEP_TIME_modem = 10; //+10
   
   long start_time=millis();
@@ -3504,7 +3601,7 @@ void Upload(String message, int valo) {
 }
 
 
-void  send_cloud_NN(String sms){
+void  send_cloud_NN(String sms, vprint print){
 
   Port1_Active=0;
   Port2_Active=0;
@@ -3660,7 +3757,7 @@ void  send_cloud_NN(String sms){
 
   if( p1_err_c || p2_err_c ||  p3_err_c || p4_err_c) {
     Serial.println("FORCED RESET.");
-    FORCED_RESET_TASK();
+    force_hardware_reset(print);
   }
 
   boolean p1_depth_err = 0;
@@ -3968,7 +4065,7 @@ void sendd(){
 
   Serial.println("cantNN_send: " + String(cantNN_send));
 
-  Serial.println("prg_iteration: " + String(prg_iteration));
+  Serial.println("Stage: " + String(Stage));
 /*
   if (MODE_PRG && NL_NN == 1){
     NL_NN = 0;
@@ -4090,3 +4187,8 @@ void val_config(String config_tempo){
   Serial.println("-----------------------------------------");
   
 }
+
+
+
+
+
