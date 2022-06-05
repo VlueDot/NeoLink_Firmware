@@ -561,6 +561,11 @@ void setup() {
   pinMode(ARDUINO_RESTART, OUTPUT);
   digitalWrite(ARDUINO_RESTART, LOW);
 
+  pinMode(AUX_IN, INPUT_PULLDOWN);
+
+  pinMode(SIM_ON, OUTPUT);
+  digitalWrite(SIM_ON, HIGH);
+
   pinMode(BAT_SOLAR_EN, OUTPUT);
   digitalWrite(BAT_SOLAR_EN, LOW);
 
@@ -608,6 +613,9 @@ void setup() {
 
     prg_iteration = 9;
     if (!check_WiFi())  turn_modem_on();
+
+    Serial.print("nuevo estado de wifi");
+    Serial.println(check_WiFi());
     
     if (Start_or_Restart) beep.vbeep(250);
     if(FIRMWARE_MODE == 'DEV'||FIRMWARE_MODE == 'DEV2.2'||FIRMWARE_MODE == 'DEV2.1') deepsleep(18);
@@ -712,17 +720,14 @@ int check_WiFi(){
   //Serial.println("Checking WiFi Default as First Step... NOT IMPLEMENTET JET");
 
   Serial.println("Checking WiFi.. ");
-  pinMode(AUX_IN, INPUT);
-  digitalWrite(AUX_IN, HIGH);
-  delay(20);
-  float check_wifi;
-  check_wifi  = ReadVoltage(AUX_IN) ;
-  check_wifi = check_wifi * 0.0009063745019920318725099601594;
+  
+  delay (3000);
+  int check_wifi = digitalRead(AUX_IN);
   Serial.println("Wifi voltage: "+String(check_wifi));
-  digitalWrite(AUX_IN, LOW);
+ 
 
-  if (check_wifi < 0.5) return 0;
-  return 1;
+  if (check_wifi) return 1;
+  else return 0;;
 }
 
 
@@ -2375,8 +2380,9 @@ void turn_modem_off() {
 
 void turn_modem_on() {
   Serial.println("Turning Modem ON");
+  
   digitalWrite(SIM_ON, HIGH);
-  delay(1500);
+  delay(1000);
   digitalWrite(SIM_ON, LOW);
   delay(2000);
 
