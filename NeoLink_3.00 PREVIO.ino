@@ -75,16 +75,16 @@ RTC_DATA_ATTR int8_t HARDWARE_AVAILABLE = 0;
   #define FIREBASE_HOST "https://neolink-934b4.firebaseio.com"
   #define FIREBASE_AUTH "IroB3fdbcPb9vxPlJKDJcqmfJgs0KouJGe0sUBKN"
   #define UPDATE_JSON_URL  "https://firmware-neolink.s3-sa-east-1.amazonaws.com/firmware_pro.json"
-  const String WIFI_SSID_DEFAULT = "LINUX5"; //modem default
-  const String WIFI_PSSWD_DEFAULT = "1a23456789abc";
+  const String WIFI_SSID = "LINUX5"; //modem default
+  const String WIFI_PSSWD = "1a23456789abc";
  
 
 #elif FIRMWARE_MODE == 'DEV'
   #define FIREBASE_HOST "https://aidadev-71837-default-rtdb.firebaseio.com/"
   #define FIREBASE_AUTH "RbsWJ3F5EsLGLvpRefgTeyGQhEFHFp5pJfECurTE"
   #define UPDATE_JSON_URL  "https://firmware-neolink.s3-sa-east-1.amazonaws.com/firmware_pro.json"
-  const String WIFI_SSID_DEFAULT = "BandSteering";
-  const String WIFI_PSSWD_DEFAULT = "A543PR4G";
+  const String WIFI_SSID = "BandSteering";
+  const String WIFI_PSSWD = "A543PR4G";
 
 #endif
 

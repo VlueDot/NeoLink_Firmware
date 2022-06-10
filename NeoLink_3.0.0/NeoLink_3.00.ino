@@ -4,15 +4,14 @@
 //
 // Compatiblee con Peripheral v2.0.0
 // Date 02 Jun 22 by V.R 
+//
+//______________________________________________________________________
+//
+// Librerias
 //______________________________________________________________________
 
-const String version = "3.0.0";
-const char* host = "esp32";
-const char* ssid = "MOVISTAR_9F86";
-const char* password = "9Qt6DFyaXZUG7SPkgZzn";
 
 //------------- Web Debug ------------------------------------------------
-
 #include <WiFi.h>
 #include <WiFiClient.h>
 #include <WebServer.h>//include webserver modified. 
@@ -21,190 +20,144 @@ const char* password = "9Qt6DFyaXZUG7SPkgZzn";
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 #include <string.h>
-
+#include "Constants.h"
 //------------- OTA HTTPS ------------------------------------------------
-
 #include "cJSON.h"
 #include <WiFiClientSecure.h>
 #include "esp_https_ota.h"
 #include "esp_http_client.h"
 #include <HTTPUpdate.h>
+//------------- Serials----------------------------------------------------------
+#include <SoftwareSerial.h>
+//-----------------------------------OWN---------------------------------
+#include <beep.h>
+//--------- INTERNAL TEMP ----------------
+#include <OneWire.h>
+#include <DallasTemperature.h>
 
 
+//______________________________________________________________________
+//
+// Pinout
+//______________________________________________________________________
+
+
+#define BAT_SOLAR_EN 23
+#define BEEP 15
+const byte esp32_RX___ard_TX = 16;
+const byte esp32_TX___ard_RX = 17;
+#define ARDUINO_RESTART 13
+#define ATMOS_EN 12
+#define TEMP_EN 25
+#define RTC_IO 33
+#define TOUCH_T9 32
+#define PIN_WIFI_STATUS 39
+#define TEMP_VALUE 33
+#define SOLAR_VALUE 37
+#define BAT_VALUE 36
+
+#define SIM_ON 4
+#define ATMEGA_FORCED_RESET_PIN 2
+
+
+
+//______________________________________________________________________
+//
+// Constantes Globales
+//______________________________________________________________________
+
+
+const String version = "3.0.0";
+const char* host = "esp32";
+
+//#define BAND    433E6
 
 #define uS_TO_S_FACTOR 1000000
+#define FIRMWARE_MODE 'DEV'
+
+
+#if FIRMWARE_MODE == 'PRO'
+  #define FIREBASE_HOST "https://neolink-934b4.firebaseio.com"
+  #define FIREBASE_AUTH "IroB3fdbcPb9vxPlJKDJcqmfJgs0KouJGe0sUBKN"
+  #define UPDATE_JSON_URL  "https://firmware-neolink.s3-sa-east-1.amazonaws.com/firmware_pro.json"
+  const char* WIFI_SSID = "LINUX5"; //modem default
+  const char* WIFI_PSSWD = "1a23456789abc";
+ 
+
+#elif FIRMWARE_MODE == 'DEV'
+  #define FIREBASE_HOST "https://aidadev-71837-default-rtdb.firebaseio.com/"
+  #define FIREBASE_AUTH "RbsWJ3F5EsLGLvpRefgTeyGQhEFHFp5pJfECurTE"
+  #define UPDATE_JSON_URL  "https://firmware-neolink.s3-sa-east-1.amazonaws.com/firmware_pro.json"
+  const char* WIFI_SSID = "MOVISTAR_9F86";
+  const char* WIFI_PSSWD = "9Qt6DFyaXZUG7SPkgZzn";
+
+#endif
+
+//Time Variables
+
+#define POWERLESS_TIME 600   //seconds to sleep when battery is low.
+#define WIFI_TIME_LIMIT 6000 //seconds to connect wifi
 
 
 
-String string_Log="";
-String tlog ="";
+
+//______________________________________________________________________
+//
+//Variable globales
+//______________________________________________________________________
 
 RTC_DATA_ATTR int16_t MODE_PRG = 1;
 
 AsyncWebServer server(80);
 AsyncWebSocket ws("/ws");
 
+// Serials
+SoftwareSerial ArdSerial(esp32_RX___ard_TX, esp32_TX___ard_RX);
+
+//Time Server
+const long  gmtOffset_sec =  -18000;
+const int   daylightOffset_sec = 0;
+
+//Own
+Beep beep(BEEP);
+
+//Internal Temperature
+OneWire oneWire(TEMP_VALUE);
+DallasTemperature sensors(&oneWire);
+
+//Default Settings
+RTC_DATA_ATTR float BAT_L = 3.2;
+RTC_DATA_ATTR float BAT_H = 3.4;
+
+//Time between stages
+int SLEEP_TIME_STAGE_1 = 18;
+
+//______________________________________________________________________
+//
+//Variables globales auxiliares
+//______________________________________________________________________
+
+String string_Log=""; //para concatenar todos los mensajes de consola
+unsigned long init_timestamp;
+RTC_DATA_ATTR int8_t Stage = 1;
 
 
- 
-/*
- * Server Index Page
- */
-
-char* log1 = 
-  "<script>t=document.createElement('div');"
-  "t.appendChild( document.createElement('br').appendChild(document.createTextNode('hola perro2')));"
-  "document.body.appendChild(t)</script>";
-
-const char* serverIndex =
-"<head>"
-  "<title>Greenbird Ag - AIDA Developer Dashboard</title>"
- " <link rel='shortcut icon' href='https://static.wixstatic.com/media/5ab796_bec8037a1f7043baaa84c8e883348b70%7Emv2.jpg/v1/fill/w_32%2Ch_32%2Clg_1%2Cusm_0.66_1.00_0.01/5ab796_bec8037a1f7043baaa84c8e883348b70%7Emv2.jpg' type='image/jpeg'>"
-"</head>"
-"<style type = 'text/css'>"
-" pre{  color: #192f43;"
-        "margin:0 ;"
-"}"
-"</style>"
 
 
-"<body onload = initWebSocket(event)>"
-//"<body>"
-  "<img src='https://static.wixstatic.com/media/5ab796_d078782c657b49f485a897ef2457a084~mv2.png/v1/fill/w_118,h_116,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/IMG_3641_PNG.png' style='vertical-align:middle'>"
-  "<img src='https://static.wixstatic.com/media/5ab796_bdead9c6276049e3afe6ddc5ea2080e5~mv2.png' height='55' style='vertical-align:middle'>"
 
- "<div><b> Greenbird is watching you! </b> </div>"
-  "<div><br> Please, select a .ino </div>"
-  "<script src='https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js'></script>"
-  "<form method='POST' action='#' enctype='multipart/form-data' id='upload_form'>"
-  "<input type='file' name='update'>"
-  "<input type='submit' value='Update and Restart'>"
-  "</form>"
-  "<div id='prg'>progress: 0%</div>"
-  "<div><br> Or use this options </div>"
-  "<button  type=\"button\" onclick = \"SoftReset()\">Soft Reset</button>"
-  "<button  type=\"button\" onclick = \"SoftResetClear()\">Soft Reset and Clear</button>"
-  "<button  type=\"button\" onclick = \"HardReset()\"> Hard Reset </button>"
-  "<button  type=\"button\" onclick = \"HardResetClear()\">Hard Reset and Clear</button>"
-  "<button  type=\"button\" onclick=\"Exit_PRG_Mode()\">Exit PRG_MODE</button>"
-  "<button  type=\"button\" onclick= \"Clear_data()\">Clear Data</button>"
- 
-
-  
-  "<div><br><b>Read data: </b><br></div>"
-  "<div><p id='log'></p></div>"
-  
-"<script>"
-
-    "var gateway = `ws://esp32.local/ws`;"
-    "var websocket;"
-
-    "function initWebSocket(event) {"
-      "console.log('Trying to open a WebSocket connection...');"
-      "websocket = new WebSocket(gateway);"
-      "websocket.onopen    = onOpen;"
-      "websocket.onclose   = onClose;" 
-      "websocket.onmessage = onMessage; "
-      "}"
-
-    "function onOpen(event) {"
-    "console.log('Connection opened'); }"
-
-    "function onClose(event) {"
-    "console.log('Connection closed');"
-    "}"
-
-    
-    "let count=0;"
-    "function onMessage(event) {"
-     "console.log(event.data);"
-      "count++;"
-      "t=document.createElement('pre');"
-      "t.setAttribute('id',count);"
-      "t.setAttribute('class', 'data');"
-      "t.appendChild( document.createTextNode(event.data));"
-      "document.body.appendChild(t)"
-  "}"
-
-"</script>"
-    
-
-"<script>"
-  "function SoftReset() {"
-    "websocket.send('SoftReset');"
-    "websocket.close(); setTimeout(initWebSocket,3200);"  
-    "console.log('Sent Soft Reset');"
-    "}"
-
-  "function SoftResetClear() {"
-    "SoftReset();"
-    "Clear_data();"
-  
-    "}"
-    
-  "function HardReset() {"
-    "websocket.send('HardReset');"
-    "websocket.close(); setTimeout(initWebSocket,3200);"  
-    "console.log('Sent Hard Reset');"
-    "}"
-
-  "function HardResetClear() {"
-    "HardReset();"
-    "Clear_data();"
-    "}"
-
-    "function Exit_PRG_Mode() {"
-    "console.log('Exit PRG_MODE');"
-    "}"
-
-    "function Clear_data() {"
-    "$('.data').remove();"
-    "}" 
-"</script>"
-
-"<script>"
-  "$('form').submit(function(e){"
-  "websocket.close(); setTimeout(initWebSocket,3500);"
-  "Clear_data();"
-  "e.preventDefault();"
-  "var form = $('#upload_form')[0];"
-  "var data = new FormData(form);"
-  " $.ajax({"
-  "url: '/update',"
-  "type: 'POST',"
-  "data: data,"
-  "contentType: false,"
-  "processData:false,"
-  "xhr: function() {"
-  "var xhr = new window.XMLHttpRequest();"
-  "xhr.upload.addEventListener('progress', function(evt) {"
-  "if (evt.lengthComputable) {"
-  "var per = evt.loaded / evt.total;"
-  "$('#prg').html('progress: ' + Math.round(per*100) + '%');"
-  "}"
-  "}, false);"
-  "return xhr;"
-  "},"
-  "success:function(d, s) {"
-  "console.log('success!')"
-  "},"
-  "error: function (a, b, c) {"
-  "}"
-  "});"
-  "});"
-"</script>"
-
-"</body>";
-
-//FUNCTIONS HEADERS
-
-void SendMessageWeb(String message) {
-  ws.textAll(message);
-}
+//______________________________________________________________________
+//
+// Clases propias. Convertirlas en librerias.
+//______________________________________________________________________
 
 class vprint{
 
 public: 
+
+
+void SendMessageWeb(String message) {
+  ws.textAll(message);
+}
 
 
 void log(String e){
@@ -214,7 +167,7 @@ void log(String e){
   str.concat(e);
   SendMessageWeb(str);
   string_Log.concat(str);
-    Serial.print(str);
+  Serial.print(str);
 }
 
 void logq(String e){
@@ -295,6 +248,10 @@ void logq(String text , double e){
 
 
 
+//______________________________________________________________________
+//
+// Codigo principal
+//______________________________________________________________________
 
 
 
@@ -312,7 +269,7 @@ void setup(void) {
 
 
   // Connect to WiFi network
-  WiFi.begin(ssid, password);
+  WiFi.begin(WIFI_SSID, WIFI_PSSWD);
   
   
   Serial.println("");
@@ -333,7 +290,7 @@ void setup(void) {
   start_server();
 
 
-  print.logq("Connected to " + String(ssid));
+  print.logq("Connected to " + String(WIFI_SSID));
   print.logq("IP address: "+ String(WiFi.localIP()));
   
 
