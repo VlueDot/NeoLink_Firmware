@@ -74,8 +74,9 @@ const byte esp32_TX___ard_RX = 17;
 //______________________________________________________________________
 
 #define FIRMWARE_MODE 'DEV'
-RTC_DATA_ATTR int16_t MODE_PRG = 0;
-RTC_DATA_ATTR int8_t HARDWARE_AVAILABLE = 1;
+RTC_DATA_ATTR int16_t MODE_PRG = 1;
+RTC_DATA_ATTR int16_t LOCAL_SERVER = 0;
+RTC_DATA_ATTR int8_t HARDWARE_AVAILABLE = 0;
 
 
 
@@ -382,9 +383,9 @@ void setup(void) {
   Serial.begin(115200);
   EEPROM.begin(150);
   
-  Stage =2;
+  //Stage =1;
   if (Stage == 1) {
-
+    Serial.println();
     Serial.println("___________________________________________________");
     print.logq("Greenbird AG - AIDA | NeoLink Firmware Version: ", firmware_version);
 
@@ -394,7 +395,7 @@ void setup(void) {
     chipid_str = String((uint16_t)(chipid >> 32), HEX) + String((uint32_t)chipid, HEX);
     print.logq("Chip ID: ", chipid_str);
 
-    
+    print_controller_status (print);    
   
     //verificar bateria, resetear arduino?, verificar si el wifi esta encendido y encenderlo. Cambiar a etapa 2
 
@@ -411,8 +412,8 @@ void setup(void) {
     Stage = 2; //Habilito el siguiente paso
 
 
-    if(MODE_PRG) deepsleep(10,print);
-    else deepsleep(SLEEP_TIME_STAGE_1,print);
+    if(MODE_PRG) deepsleep(1,print);
+    else deepsleep(SLEEP_TIME_STAGE_1, print);
 
   }
 
@@ -424,45 +425,25 @@ void setup(void) {
     atmega_force_reset(print);
 
     // Connect to WiFi network
-    if(check_WiFi(print,1000))starting_wifi(print);
-    else {
-      turn_modem_on(print);
-      handleCommands("SoftReset");
-
-    }
-
-    if(MODE_PRG){    ws.onEvent(onEvent);
-    server.addHandler(&ws);
-    start_server();}
+    if(check_WiFi(print,1000)) starting_wifi(print);
+    else { turn_modem_on(print); handleCommands("SoftReset"); }
 
 
+    if(LOCAL_SERVER){  ws.onEvent(onEvent); server.addHandler(&ws); start_server();}
+
+    check_configurations(print);
     
-
-    print.logq("Connected to " + String(WIFI_SSID));
-    print.logq("IP address: "+ String(WiFi.localIP()));
-
-
-      
-    if(HARDWARE_AVAILABLE) print.logq("Running with Hadware available");
-    else  print.logq("Running without Hadware. Just ESP32 board.");
-
-    if(MODE_PRG) print.logq("[PRG Mode enabled]");
-
-    if(FIRMWARE_MODE == 'DEV') print.logq ("Firmware mode DEV");
-    else ("Firmware mode PROD");
-
-
+   
   
- 
+    Stage = 1;
 }
 
 }
 
 void loop(void) {
-  if(MODE_PRG) {
-    ws.cleanupClients();
-    handleCommands("SoftReset");}
-  else handleCommands("SoftReset",10);
+  if(LOCAL_SERVER) ws.cleanupClients();
+  if(MODE_PRG) handleCommands("SoftReset");
+
 }
 
 
@@ -470,6 +451,65 @@ void loop(void) {
 //
 // Functions
 //______________________________________________________________________
+
+void check_configuration(vprint print){
+
+    Update_Local_Info_Chip(print, update_local_info_flag);
+
+    Firebase.getInt(firebasedata, "Services_controllers_Flags/Devices/" + SN + "/local_update_firmware"); 
+    local_update_firmware = firebasedata.intData();
+    Firebase.getInt(firebasedata, "Services_controllers_Flags/Devices/" + SN + "/update_config_flag"); 
+    update_config_flag = firebasedata.intData();
+    Firebase.getInt(firebasedata, "Services_controllers_Flags/Devices/" + SN + "/update_local_info_flag"); 
+    update_local_info_flag = firebasedata.intData();
+
+    print.logq(local_update_firmware);
+    print.logq(update_config_flag);
+    print.logq(update_local_info_flag);
+
+
+  
+}
+
+void Update_Local_Info_Chip(vprint print, int update_local_info_flag){
+
+//Verifica que se encuentre el tipo de equipo en la eeprom no sea XX o vacio. Si lo es descarga la Local Info y guarda en la eeprom. 
+//verifica la que la bandera update_local_info_chip se encuentre en 1 para descargar nuevamente la data
+
+print.logq("Checking Local Info: ");
+
+for( int i = 0; i <= 3 ; i++ ) SN_HEADER [i] = char(EEPROM.read (i));
+
+print.logqq("SN_HEADER in EEPROM is: ", SN_HEADER);
+
+EEPROM.write(0,'X');
+EEPROM.commit();
+
+print.logqq("EEPROM: ", char(EEPROM.read (0)) );
+
+for( int i = 0; i <= 3 ; i++ ) SN_HEADER [i] = char(EEPROM.read (i));
+
+print.logqq("SN_HEADER in EEPROM is: ", SN_HEADER);
+
+
+}
+
+
+
+void print_controller_status(vprint print){
+
+   
+    if(HARDWARE_AVAILABLE) print.logq("Running with Hadware available");
+    else  print.logq("Running without Hadware. Just ESP32 board.");
+
+    if(MODE_PRG) print.logq("[PRG Mode enabled]");
+    
+    if(LOCAL_SERVER) print.logq("[Local Server enabled]");
+
+    if(FIRMWARE_MODE == 'DEV') print.logq ("Firmware mode DEV");
+    else ("Firmware mode PROD");
+
+}
 
 void starting_wifi(vprint print) {
   int wifi_try = 1;
@@ -488,7 +528,9 @@ void starting_wifi(vprint print) {
       }
       if (WiFi.status() == WL_CONNECTED) {
 
-        print.logqq("IP: ", String(WiFi.localIP()));
+        print.logq("Connected to " + String(WIFI_SSID));
+        print.logq("IP address: "+ String(WiFi.localIP()));
+
 
         Firebase.begin(FIREBASE_HOST, FIREBASE_AUTH);
         Firebase.reconnectWiFi(true);
@@ -522,12 +564,6 @@ void starting_wifi(vprint print) {
 
 }
 
-
-
-
-
-
-
 void SendMsgToClient(String command, vprint print){
   
   ws.textAll(command);
@@ -537,11 +573,11 @@ void SendMsgToClient(String command, vprint print){
 
 void handleCommands(String data){
 
-if(data == "SoftReset") {
-  SendMsgToClient("[RESET]",print);
-  delay(1000);
-  deepsleep(1,print);}
-else Serial.print("No command.");
+  if(data == "SoftReset") {
+    SendMsgToClient("[RESET]",print);
+    delay(1000);
+    deepsleep(1,print);}
+  else Serial.print("No command.");
 
 }
 
@@ -614,8 +650,6 @@ void handleUpload(AsyncWebServerRequest *request, String filename, size_t index,
     // https://github.com/me-no-dev/ESPAsyncWebServer/issues/542#issuecomment-508489206
 }
 
-
-
 void start_server(){
 
  /*use mdns for host name resolution*/
@@ -655,7 +689,6 @@ server.on("/update", xHTTP_POST, [](AsyncWebServerRequest *request) {
   server.begin();
 
 }
-
 
 int checking_battery(vprint print) {
   
@@ -710,8 +743,6 @@ void deepsleep(int time2sleep, vprint print) {
 
 }
 
-
-
 void atmega_force_reset(vprint print){
 
   print.logq("Forcing Atmega to reset.");
@@ -733,14 +764,14 @@ int check_WiFi(vprint print, int millis_delay){
 
   print.logqq("WiFi_HW_Status = ", WiFi_HW_Status );
 
+  if(!HARDWARE_AVAILABLE) WiFi_HW_Status = 1;
+
   if(WiFi_HW_Status) print.logqq("WiFi is already ON.");
-  else print.logqq("WiFi is OFF." , WiFi_HW_Status);
+  else print.logqq("WiFi is OFF. " , WiFi_HW_Status);
 
 
   return WiFi_HW_Status;
 }
-
-
 
 void turn_modem_on(vprint print) {
   print.logq("Turning Modem ON.");
@@ -750,7 +781,6 @@ void turn_modem_on(vprint print) {
   delay(2000);
   print.logqq("Done.");
 }
-
 
 double ReadVoltage(byte pin) {
 
