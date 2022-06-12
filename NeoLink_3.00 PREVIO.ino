@@ -47,7 +47,7 @@
 //--------- INTERNAL TEMP ----------------
 #include <OneWire.h>
 #include <DallasTemperature.h>
-//--------- Lora librarie-----------------
+
 
 
 
@@ -820,7 +820,6 @@ void setup() {
 
  
   //SE DEBE CREAR UNA VARIABLE PARA HABILITAR LA PANTALLA?
-
   //Heltec.begin(false /*DisplayEnable Enable*/, false /*Heltec.LoRa Disable*/, false /*Serial Enable*/, false /*PABOOST Enable*/, BAND /*long BAND*/);
   //delay(1000);
   
@@ -864,14 +863,8 @@ void setup() {
 
   }
 
-  
-
-
   else if (Stage == 2) {
   // Descargar le Local Serial Number. Verificar si hay nuevo Firmware. Descargar nueva configuracion. 
-    
-    
-    
 
     print.logq("[STEP 2]:" );
     ArdSerial.begin(57600);
@@ -886,6 +879,10 @@ void setup() {
     update_config_flag = firebasedata.intData();
     Firebase.getInt(firebasedata, "Services_controllers_Flags/Devices/" + SN + "/update_local_info_flag"); 
     update_local_info_flag = firebasedata.intData();
+
+    print.logq(local_update_firmware);
+    print.logq(update_config_flag);
+    print.logq(update_local_info_flag);
     
 
     
