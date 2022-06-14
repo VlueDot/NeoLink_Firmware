@@ -76,6 +76,7 @@ void setup() {
   digitalWrite(GPS_EN, LOW );
   pinMode(INTERRUPT_PIN_RESET, INPUT);
   pinMode(GPS_EN, OUTPUT);
+  pinMode(18,OUTPUT);
   
   ESP32.begin(57600);
   init_time = millis();
@@ -296,7 +297,7 @@ void loop() {
 
     }
    
-    else if ( request == 'g') {
+    /*else if ( request == 'g') {
       delay(1000);
       ESP32.write('@');
       Serial.println("Requesting GPS..");
@@ -308,11 +309,11 @@ void loop() {
       
       gps.begin(9600);
       
-      String gps_message = get_gps(MAX_TIME_GPS);
+      //String gps_message = get_gps(MAX_TIME_GPS);
 
       digitalWrite(GPS_EN, LOW );
       
-      Serial.println(gps_message); 
+      //Serial.println(gps_message); 
 
       ESP32.print(gps_message);
 
@@ -329,7 +330,7 @@ void loop() {
       Going_To_Sleep();
      
 
-    }
+    }*/
 
     else if (request == 'e'){
         delay(100);

@@ -56,7 +56,7 @@
 const String DEVICE_TYPE = "NeoLink";
 const String DEVICE_HEADER = "NL";
 String SN = "XX0000-0000";
-const String FIRMWARE_VER = "2.3.1";
+const String FIRMWARE_VER = "2.3.2";
 //const double BUILT = 552;
 const char* HARDWARE_VER = "2.0";
 
@@ -821,6 +821,9 @@ void get_LOCAL_SN(){
 
 //------------------------------------------------------------------
 void check_registered() {
+
+  
+
   if (!wifi_conf_isSet) wifi_conf_isSet = setting_wifi();
   if ( WiFi.status() != WL_CONNECTED) starting_wifi();
   //if ( WiFi.status() != WL_CONNECTED) starting_wifi();
@@ -830,6 +833,13 @@ void check_registered() {
     if ( WiFi.status() != WL_CONNECTED) starting_wifi();
 
     if ( WiFi.status() == WL_CONNECTED) {
+
+      
+
+
+      is_registered = Firebase.getString(firebasedata, "OLDneolinks/" + SN + "/correo");
+      Firebase.getInt(firebasedata, "SN_CHIPS/" + chipid_str + "/UPDATE"); // if reset, newconf is 1 by default.
+
       is_registered = Firebase.getString(firebasedata, "OLDneolinks/" + SN + "/correo");
       Firebase.getInt(firebasedata, "SN_CHIPS/" + chipid_str + "/UPDATE"); // if reset, newconf is 1 by default.
       Update_LocalSN_Flag = firebasedata.intData();
@@ -863,6 +873,9 @@ void check_registered() {
   else {
     Serial.println("Device " + SN + " already registered.");
 
+
+  
+
     if (!Start_or_Restart) {
       Firebase.getInt(firebasedata,  DEVICE + PATH_CONFIGURATION_STATUS + "NewConf"); // if reset, newconf is 1 by default.
       NewConf_flag = firebasedata.intData();
@@ -870,6 +883,15 @@ void check_registered() {
       if(NewConf_flag)  config_begin = 11;
     }
   }
+
+    int force_reset_flag =0; 
+    
+    Firebase.getInt(firebasedata, "/NeoLink_ManagerFlags/FlagUpdate"); // if reset, newconf is 1 by default.
+    force_reset_flag = firebasedata.intData();
+    Serial.print("Force reset flag = ");
+    Serial.println(force_reset_flag);
+
+    if(force_reset_flag = 1 ) FORCED_RESET_TASK();
 
 
   if (NewConf_flag) {
@@ -3102,10 +3124,10 @@ void depth_request(String direc) {
 
 
 void FORCED_RESET_TASK(){
-
+/*
     WiFi.disconnect(true);
     WiFi.mode(WIFI_OFF);
-
+*/
 
     unsigned long task_start_time;
     int i=0;

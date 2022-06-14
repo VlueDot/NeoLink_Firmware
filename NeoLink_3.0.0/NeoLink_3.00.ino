@@ -19,7 +19,7 @@
 #include <Update.h>
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
-#include <string.h>
+//#include <String.h>
 #include "Constants.h"
 //------------- OTA HTTPS ------------------------------------------------
 #include "cJSON.h"
@@ -75,7 +75,7 @@ const byte esp32_TX___ard_RX = 17;
 
 #define FIRMWARE_MODE 'DEV'
 RTC_DATA_ATTR int16_t MODE_PRG = 1;
-RTC_DATA_ATTR int16_t LOCAL_SERVER = 0;
+RTC_DATA_ATTR int16_t LOCAL_SERVER = 1;
 RTC_DATA_ATTR int8_t HARDWARE_AVAILABLE = 0;
 
 
@@ -89,15 +89,13 @@ RTC_DATA_ATTR int8_t HARDWARE_AVAILABLE = 0;
 const String firmware_version = "3.0.0";
 const char* host = "esp32";
 
-
-
-
-
 //#define BAND    433E6
 
 #define uS_TO_S_FACTOR 1000000
 
-
+char SN_HEADER [20];
+String DEVICE_HEADER_FIRMWARE = "NL";
+String HARDWARE_VERSION_FIRMWARE = "03";
 
 
 #if FIRMWARE_MODE == 'PRO'
@@ -138,6 +136,14 @@ AsyncWebServer server(80);
 AsyncWebSocket ws("/ws");
 
 
+String SN;
+String DEVICE_HEADER;
+String HARDWARE_VERSION;
+String ENVIRONMENT;
+String DATE_CORRELATIVE;
+String SN_CORRELATIVE;
+
+
 
 // Serials
 SoftwareSerial ArdSerial(esp32_RX___ard_TX, esp32_TX___ard_RX);
@@ -169,11 +175,11 @@ String string_Log=""; //para concatenar todos los mensajes de consola
 unsigned long init_timestamp;
 RTC_DATA_ATTR int8_t Stage = 1;
 RTC_DATA_ATTR int8_t Start_or_Restart = 1;
-uint64_t chipid;
 String chipid_str;
 RTC_DATA_ATTR float battery_voltage = -10;
 RTC_DATA_ATTR float solar_voltage = -10;
 RTC_DATA_ATTR int8_t battery_available = 1; 
+RTC_DATA_ATTR int update_sn_flag = 0 ;
 
 
 
@@ -346,7 +352,11 @@ void handleCommands(String data, int timeToSleep);
 void onEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len);
 void start_server();
 void starting_wifi(vprint print);
-
+void check_configuration(vprint print);
+void Update_Local_Info_Chip(vprint print, int update_local_info_flag);
+void write_eeprom(String data, int position);
+String read_eeprom(int init, int len);
+void get_SN_n_MAC(vprint print);
 
 //______________________________________________________________________
 //
@@ -391,10 +401,8 @@ void setup(void) {
 
     if (Start_or_Restart) beep.vbeep(250);
 
-    chipid = ESP.getEfuseMac(); //The chip ID is its MAC address(length: 6 bytes).
-    chipid_str = String((uint16_t)(chipid >> 32), HEX) + String((uint32_t)chipid, HEX);
-    print.logq("Chip ID: ", chipid_str);
-
+    get_SN_n_MAC(print);
+    
     print_controller_status (print);    
   
     //verificar bateria, resetear arduino?, verificar si el wifi esta encendido y encenderlo. Cambiar a etapa 2
@@ -431,10 +439,15 @@ void setup(void) {
 
     if(LOCAL_SERVER){  ws.onEvent(onEvent); server.addHandler(&ws); start_server();}
 
-    check_configurations(print);
+    check_configuration(print);
     
-   
-  
+   /*
+    for (int i = 0; i < 20; i++)
+    {
+      print.logq(i);
+      delay(1000);
+    }
+    */
     Stage = 1;
 }
 
@@ -452,11 +465,35 @@ void loop(void) {
 // Functions
 //______________________________________________________________________
 
+void get_SN_n_MAC(vprint print){
+
+  print.logq("Reading SN and MAC:");
+
+  DEVICE_HEADER = read_eeprom( 0 , 2 );
+  HARDWARE_VERSION = read_eeprom( 2 , 2);
+  ENVIRONMENT = read_eeprom( 4 , 1 );
+  DATE_CORRELATIVE = read_eeprom( 5 , 4);
+  SN_CORRELATIVE = read_eeprom( 9 , 4);
+
+  SN = DEVICE_HEADER+HARDWARE_VERSION+ENVIRONMENT+DATE_CORRELATIVE+SN_CORRELATIVE;
+  
+  if((DEVICE_HEADER + HARDWARE_VERSION)==(DEVICE_HEADER_FIRMWARE+HARDWARE_VERSION_FIRMWARE)) print.logqq("Firmware compatible with this device version. SN: ", SN);
+  else print.logqq("SN not for this firmware. Updating SN in a while. SN: ", SN );
+
+  uint64_t chipid;
+  chipid = ESP.getEfuseMac(); //The chip ID is its MAC address(length: 6 bytes).
+  chipid_str = String((uint16_t)(chipid >> 32), HEX) + String((uint32_t)chipid, HEX);
+
+  print.logqq("Chip ID: ", chipid_str);
+
+
+} 
+
 void check_configuration(vprint print){
 
-    Update_Local_Info_Chip(print, update_local_info_flag);
+    //Update_Local_Info_Chip(print, update_local_info_flag);
 
-    Firebase.getInt(firebasedata, "Services_controllers_Flags/Devices/" + SN + "/local_update_firmware"); 
+    /*Firebase.getInt(firebasedata, "Services_controllers_Flags/Devices/" + SN + "/local_update_firmware"); 
     local_update_firmware = firebasedata.intData();
     Firebase.getInt(firebasedata, "Services_controllers_Flags/Devices/" + SN + "/update_config_flag"); 
     update_config_flag = firebasedata.intData();
@@ -465,7 +502,7 @@ void check_configuration(vprint print){
 
     print.logq(local_update_firmware);
     print.logq(update_config_flag);
-    print.logq(update_local_info_flag);
+    print.logq(update_local_info_flag);*/
 
 
   
@@ -476,38 +513,62 @@ void Update_Local_Info_Chip(vprint print, int update_local_info_flag){
 //Verifica que se encuentre el tipo de equipo en la eeprom no sea XX o vacio. Si lo es descarga la Local Info y guarda en la eeprom. 
 //verifica la que la bandera update_local_info_chip se encuentre en 1 para descargar nuevamente la data
 
-print.logq("Checking Local Info: ");
+print.logq("Checking for new configurations in firebase. " );
 
-for( int i = 0; i <= 3 ; i++ ) SN_HEADER [i] = char(EEPROM.read (i));
 
-print.logqq("SN_HEADER in EEPROM is: ", SN_HEADER);
-
-EEPROM.write(0,'X');
-EEPROM.commit();
-
-print.logqq("EEPROM: ", char(EEPROM.read (0)) );
-
-for( int i = 0; i <= 3 ; i++ ) SN_HEADER [i] = char(EEPROM.read (i));
-
-print.logqq("SN_HEADER in EEPROM is: ", SN_HEADER);
 
 
 }
 
+void write_eeprom(String string_to_eeprom, int position){
+
+ 
+  for (size_t i = 0; i <  string_to_eeprom.length() ; i++)
+  {
+    EEPROM.write(i+position,string_to_eeprom[i]);
+    Serial.print("Saving ");
+     Serial.print(string_to_eeprom[i]);
+     Serial.print("in ");
+     Serial.print( i + position);
+  }
+
+  EEPROM.commit(); 
+  
+  
+}
+
+String read_eeprom(int init, int len){
+
+  char eeprom_to_read[20];
+
+  for( int i=0; i< len ; i++ ){
+    eeprom_to_read[i] = char(EEPROM.read(i+init));
+    /*
+    Serial.print(i);
+    Serial.print(": ");
+    Serial.print(eeprom_to_read[i]);
+    Serial.print(": ");
+    Serial.println(String(EEPROM.read(i+init)));
+    */
+  } 
+  eeprom_to_read[len]='\0';
+
+  return String(eeprom_to_read);
+}
 
 
 void print_controller_status(vprint print){
-
+  print.logq("Running in modes:");
    
-    if(HARDWARE_AVAILABLE) print.logq("Running with Hadware available");
-    else  print.logq("Running without Hadware. Just ESP32 board.");
+    if(HARDWARE_AVAILABLE) print.logqq("[Running with Hadware]");
+    else  print.logqq("[Running without Hadware]");
 
-    if(MODE_PRG) print.logq("[PRG Mode enabled]");
+    if(MODE_PRG) print.logqq("[PRG Mode enabled]");
     
-    if(LOCAL_SERVER) print.logq("[Local Server enabled]");
+    if(LOCAL_SERVER) print.logqq("[Local Server enabled]");
 
-    if(FIRMWARE_MODE == 'DEV') print.logq ("Firmware mode DEV");
-    else ("Firmware mode PROD");
+    if(FIRMWARE_MODE == 'DEV') print.logqq("[Firmware mode DEV]");
+    else ("[Firmware mode PROD]");
 
 }
 
@@ -520,7 +581,7 @@ void starting_wifi(vprint print) {
     WiFi.begin(WIFI_SSID, WIFI_PSSWD);
     
     init_timestamp = millis();
-
+    Serial.print("\t\t");
     while (1) {
       while (WiFi.status() != WL_CONNECTED && millis() - init_timestamp < WIFI_TIME_LIMIT ) {
         Serial.print(".");
@@ -528,9 +589,8 @@ void starting_wifi(vprint print) {
       }
       if (WiFi.status() == WL_CONNECTED) {
 
-        print.logq("Connected to " + String(WIFI_SSID));
-        print.logq("IP address: "+ String(WiFi.localIP()));
-
+        print.logqq("Connected to " + String(WIFI_SSID));
+        print.logqq("IP address: "+ WiFi.localIP().toString());
 
         Firebase.begin(FIREBASE_HOST, FIREBASE_AUTH);
         Firebase.reconnectWiFi(true);
