@@ -122,6 +122,8 @@ String HARDWARE_VERSION_FIRMWARE = "03";
 #define POWERLESS_TIME 600   //seconds to sleep when battery is low.
 #define WIFI_TIME_LIMIT 6000 //seconds to connect wifi
 
+#define NO_PING_TIME 60
+
 
 
 
@@ -136,7 +138,7 @@ AsyncWebServer server(80);
 AsyncWebSocket ws("/ws");
 
 
-String SN;
+
 String DEVICE_HEADER;
 String HARDWARE_VERSION;
 String ENVIRONMENT;
@@ -144,6 +146,11 @@ String DATE_CORRELATIVE;
 String SN_CORRELATIVE;
 
 
+String SN;
+String chipid_str;
+
+//firebase
+FirebaseData firebasedata;
 
 // Serials
 SoftwareSerial ArdSerial(esp32_RX___ard_TX, esp32_TX___ard_RX);
@@ -175,7 +182,7 @@ String string_Log=""; //para concatenar todos los mensajes de consola
 unsigned long init_timestamp;
 RTC_DATA_ATTR int8_t Stage = 1;
 RTC_DATA_ATTR int8_t Start_or_Restart = 1;
-String chipid_str;
+
 RTC_DATA_ATTR float battery_voltage = -10;
 RTC_DATA_ATTR float solar_voltage = -10;
 RTC_DATA_ATTR int8_t battery_available = 1; 
@@ -350,13 +357,16 @@ void turn_modem_on(vprint print);
 void handleCommands(String data);
 void handleCommands(String data, int timeToSleep);
 void onEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len);
-void start_server();
+void start_server(vprint print);
 void starting_wifi(vprint print);
 void check_configuration(vprint print);
 void Update_Local_Info_Chip(vprint print, int update_local_info_flag);
 void write_eeprom(String data, int position);
 String read_eeprom(int init, int len);
 void get_SN_n_MAC(vprint print);
+bool ping(vprint print);
+void print_controller_status(vprint print);
+void create_SN_nodes(vprint print);
 
 //______________________________________________________________________
 //
@@ -403,7 +413,7 @@ void setup(void) {
 
     get_SN_n_MAC(print);
     
-    print_controller_status (print);    
+    print_controller_status(print);    
   
     //verificar bateria, resetear arduino?, verificar si el wifi esta encendido y encenderlo. Cambiar a etapa 2
 
@@ -429,6 +439,9 @@ void setup(void) {
     Serial.println("___________________________________________________");
     print.logq("[STAGE 2]: ");
 
+    //getting SN an MAC, again..
+    get_SN_n_MAC(print); 
+
     //physical forced reset Atmega328pu. Why?
     atmega_force_reset(print);
 
@@ -437,17 +450,22 @@ void setup(void) {
     else { turn_modem_on(print); handleCommands("SoftReset"); }
 
 
-    if(LOCAL_SERVER){  ws.onEvent(onEvent); server.addHandler(&ws); start_server();}
+    if(LOCAL_SERVER){  ws.onEvent(onEvent); server.addHandler(&ws); start_server(print);}
 
+    if(LOCAL_SERVER) delay(6000);
+
+    //checking first if there is internet
+    if(!ping(print)) handleCommands("SoftReset",NO_PING_TIME);
+    
     check_configuration(print);
     
-   /*
+   
     for (int i = 0; i < 20; i++)
     {
       print.logq(i);
       delay(1000);
     }
-    */
+    
     Stage = 1;
 }
 
@@ -489,7 +507,77 @@ void get_SN_n_MAC(vprint print){
 
 } 
 
+
+bool ping(vprint print){
+
+  print.logq("ping...");
+  if(Firebase.getBool(firebasedata, "/SN_Chips/Ping")){
+    print.logqq("success.");
+    return true;
+
+  } else {
+    print.logqq("Fail. Resetting NO_PING. ");
+    return false;}
+
+
+}  
+
+void create_SN_nodes(vprint print) {
+  print.logq("Creating SN nodes for " + chipid_str);
+
+  neoFirebaseJson json_SN_nodes;
+  json_SN_nodes.FirebaseJson::set("DEVICE_HEADER", chipid_str); 
+  json_SN_nodes.FirebaseJson::set("HARDWARE_VERSION","00");
+  json_SN_nodes.FirebaseJson::set("ENVIRONMENT", "D");
+  json_SN_nodes.FirebaseJson::set("DATE_CORR_AAMM", "2200");
+  json_SN_nodes.FirebaseJson::set("SN_CORR_AAMM", "9999");
+
+  String buff_string_SN_nodes;
+  json_SN_nodes.toString(buff_string_SN_nodes,true);
+  print.logqq(buff_string_SN_nodes); 
+
+  Firebase.updateNode(firebasedata, "/SN_Chips/" + chipid_str + "/", json_SN_nodes );
+  print.logqq("Done.");
+  handleCommands("SoftReset");
+
+
+
+}
+
 void check_configuration(vprint print){
+
+    print.logq("Checking for configurations.");
+
+    //getting update_sn_flag and new_config_flags
+    //get sn by chipid and compare. if is the same update_sn_flag = 1 and 
+    //well ... the sn will update and check if nodes in firebase related exist. 
+    
+    FirebaseJsonData SN_Chip_firebase_data;
+    FirebaseJson SN_Chip_firebase;
+    String SN_Chip_str;
+
+    if(Firebase.get(firebasedata, "/SN_Chips/" + chipid_str + "/")) {
+      Serial.println(firebasedata.dataType());
+
+      firebasedata.jsonObject().toString(SN_Chip_str,true);
+      Serial.println(SN_Chip_str);
+    
+/*
+      String buff_string_SN_Chip;
+      SN_Chip_firebase.toString(buff_string_SN_Chip,true);
+      print.logqq("Looking for SN_Chip_Firebase: ");
+      print.logqq(buff_string_SN_Chip); */
+      
+      
+      }
+    else {
+      print.logqq("SN not found.");
+      create_SN_nodes(print);
+    
+    }
+    
+ 
+
 
     //Update_Local_Info_Chip(print, update_local_info_flag);
 
@@ -504,9 +592,9 @@ void check_configuration(vprint print){
     print.logq(update_config_flag);
     print.logq(update_local_info_flag);*/
 
-
-  
 }
+  
+
 
 void Update_Local_Info_Chip(vprint print, int update_local_info_flag){
 
@@ -710,7 +798,7 @@ void handleUpload(AsyncWebServerRequest *request, String filename, size_t index,
     // https://github.com/me-no-dev/ESPAsyncWebServer/issues/542#issuecomment-508489206
 }
 
-void start_server(){
+void start_server(vprint print){
 
  /*use mdns for host name resolution*/
   if (!MDNS.begin(host)) { //http://esp32.local
@@ -721,8 +809,8 @@ void start_server(){
   }
   delay(1000);
 
-  Serial.println("Server started: http://esp32.local/"); //http://esp32.local/
-  /*return index page which is stored in serverIndex */
+  //Serial.println("Server started: http://esp32.local/"); //http://esp32.local/
+  print.logq("Server started: http://esp32.local/");  /*return index page which is stored in serverIndex */
 
 
   server.on("/", xHTTP_GET, [](AsyncWebServerRequest *request){
