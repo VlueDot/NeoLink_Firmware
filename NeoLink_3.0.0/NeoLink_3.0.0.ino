@@ -122,7 +122,12 @@ String HARDWARE_VERSION_FIRMWARE = "03";
 #define POWERLESS_TIME 600   //seconds to sleep when battery is low.
 #define WIFI_TIME_LIMIT 6000 //seconds to connect wifi
 
-#define NO_PING_TIME 60
+#define NO_PING_TIME 180      // when doesnt exist first internet connection
+#define NO_INTERNET_DESPITE_PING 60 //  when doesnt exist internet connection before the first one
+
+#define DEFAULT_SN_SLEEPTIME 60
+
+
 
 
 
@@ -361,12 +366,17 @@ void start_server(vprint print);
 void starting_wifi(vprint print);
 void check_configuration(vprint print);
 void Update_Local_Info_Chip(vprint print, int update_local_info_flag);
-void write_eeprom(String data, int position);
+void write_eeprom(String string_to_eeprom, int position, vprint print);
 String read_eeprom(int init, int len);
 void get_SN_n_MAC(vprint print);
 bool ping(vprint print);
 void print_controller_status(vprint print);
 void create_SN_nodes(vprint print);
+void create_nodes(vprint print) ;
+String* get_firebase_json_str(vprint print);
+String get_value_json_str(String * response, String variable_required);
+void deepsleep(int time2sleep, vprint print, String message);
+void update_SN(vprint print);
 
 //______________________________________________________________________
 //
@@ -447,16 +457,19 @@ void setup(void) {
 
     // Connect to WiFi network
     if(check_WiFi(print,1000)) starting_wifi(print);
-    else { turn_modem_on(print); handleCommands("SoftReset"); }
+    else { Stage = 1 ; turn_modem_on(print); handleCommands("SoftReset"); }
 
-
+    // Enabling local server if is required
     if(LOCAL_SERVER){  ws.onEvent(onEvent); server.addHandler(&ws); start_server(print);}
 
-    if(LOCAL_SERVER) delay(6000);
+    //wait time to refresh your web
+    //if(LOCAL_SERVER) delay(5000);
 
     //checking first if there is internet
-    if(!ping(print)) handleCommands("SoftReset",NO_PING_TIME);
-    
+    if(!ping(print)) deepsleep(1,print,"Deepsleep because no ping."); //handleCommands("SoftReset",NO_PING_TIME);
+
+    update_SN(print);
+
     check_configuration(print);
     
    
@@ -483,6 +496,51 @@ void loop(void) {
 // Functions
 //______________________________________________________________________
 
+
+String* get_firebase_json_str(vprint print){
+  /*get json from firebase as ordered string*/
+  
+  String buffer;
+  
+  FirebaseJson  &firebase_json = firebasedata.jsonObject();
+  
+  firebase_json.toString(buffer,true);
+  print.logqq("\tjson: ",buffer);
+
+   
+  size_t len = firebase_json.iteratorBegin();
+  String* result = new String[2*len+1];
+
+  String key, value = "";
+  int type = 0;
+  int i1,i2;
+  for (size_t i = 0; i < len; i++)
+        {   i1=2*i+1;
+            i2=i1+1;
+            firebase_json.iteratorGet(i, type, key, value);
+            result [i1] =  key;
+            result [i2] = value;
+          
+
+        }
+  firebase_json.iteratorEnd();
+  result[0] = 2*len;
+return result;
+
+}
+
+String get_value_json_str(String* response, String variable_required){
+
+  for (size_t i = 1; i < response[0].toInt(); i++)
+  {
+      //Serial.println("THIS > " +response[i]);
+      
+    if(response[i] == variable_required) return response[i+1];
+      
+  }
+
+}
+
 void get_SN_n_MAC(vprint print){
 
   print.logq("Reading SN and MAC:");
@@ -493,7 +551,15 @@ void get_SN_n_MAC(vprint print){
   DATE_CORRELATIVE = read_eeprom( 5 , 4);
   SN_CORRELATIVE = read_eeprom( 9 , 4);
 
+  /*Serial.println(DEVICE_HEADER);
+  Serial.println(HARDWARE_VERSION);
+  Serial.println(ENVIRONMENT);
+  Serial.println(DATE_CORRELATIVE);
+  Serial.println(SN_CORRELATIVE);*/
+
   SN = DEVICE_HEADER+HARDWARE_VERSION+ENVIRONMENT+DATE_CORRELATIVE+SN_CORRELATIVE;
+
+  //Serial.println(SN);
   
   if((DEVICE_HEADER + HARDWARE_VERSION)==(DEVICE_HEADER_FIRMWARE+HARDWARE_VERSION_FIRMWARE)) print.logqq("Firmware compatible with this device version. SN: ", SN);
   else print.logqq("SN not for this firmware. Updating SN in a while. SN: ", SN );
@@ -507,7 +573,6 @@ void get_SN_n_MAC(vprint print){
 
 } 
 
-
 bool ping(vprint print){
 
   print.logq("ping...");
@@ -516,7 +581,19 @@ bool ping(vprint print){
     return true;
 
   } else {
-    print.logqq("Fail. Resetting NO_PING. ");
+    print.logqq("Fail.");
+
+    print.logq("ping again...");
+    if(Firebase.getBool(firebasedata, "/SN_Chips/Ping")){
+        print.logqq("success.");
+        return true;
+
+      } else {
+        print.logqq("Fail. Resetting NO_PING. ");
+        return false;}
+
+
+
     return false;}
 
 
@@ -544,53 +621,162 @@ void create_SN_nodes(vprint print) {
 
 }
 
+void create_nodes(vprint print) {
+  //checking if default nodes exist, otherwise...
+  //19.06 15:19 is absurd. I decided to create the default nodes in every case if SN changes.
+  print.logq("Creating nodes with default values for " + SN);
+
+  json_node_controllers_flag.FirebaseJson::set("local_update_firmware", 0); 
+  json_node_controllers_flag.FirebaseJson::set("update_config_flag", 0); 
+
+  neoFirebaseJson json_node_services_config;
+  json_node_services_config.FirebaseJson::set("LATITUDE", 0.0); 
+  json_node_services_config.FirebaseJson::set("LONGITUDE", 0.0); 
+  json_node_services_config.FirebaseJson::set("BAT_H", 0.0); 
+  json_node_services_config.FirebaseJson::set("BAT_L", 0.0); 
+  json_node_services_config.FirebaseJson::set("BEEP_INIT", false); 
+  json_node_services_config.FirebaseJson::set("BEEP_END", false); 
+  json_node_services_config.FirebaseJson::set("DAY_SLEEP_HOUR", 8); 
+  json_node_services_config.FirebaseJson::set("DAY_SLEEPTIME", 15); //minutes
+  json_node_services_config.FirebaseJson::set("NIGHT_SLEEP_HOUR", 20); 
+  json_node_services_config.FirebaseJson::set("NIGHT_SLEEPTIME", 15); //minutes
+  json_node_services_config.FirebaseJson::set("PORT_RQ", false); 
+  json_node_services_config.FirebaseJson::set("ATMOS_RQ", false); 
+  json_node_services_config.FirebaseJson::set("SD_ENABLE", false); 
+  
+  json_node_services_config.FirebaseJson::set("PORTS/PORT_1/ENABLE", false); 
+  json_node_services_config.FirebaseJson::set("PORTS/PORT_1/DEPTH_1A", false);
+  json_node_services_config.FirebaseJson::set("PORTS/PORT_1/DEPTH_1B", false); 
+
+  json_node_services_config.FirebaseJson::set("PORTS/PORT_2/ENABLE", false); 
+  json_node_services_config.FirebaseJson::set("PORTS/PORT_2/DEPTH_2A", false);
+  json_node_services_config.FirebaseJson::set("PORTS/PORT_2/DEPTH_2B", false); 
+
+  json_node_services_config.FirebaseJson::set("PORTS/PORT_3/ENABLE", false); 
+  json_node_services_config.FirebaseJson::set("PORTS/PORT_3/DEPTH_3A", false);
+  json_node_services_config.FirebaseJson::set("PORTS/PORT_3/DEPTH_3B", false); 
+
+  json_node_services_config.FirebaseJson::set("PORTS/PORT_4/ENABLE", false); 
+  json_node_services_config.FirebaseJson::set("PORTS/PORT_4/DEPTH_4A", false);
+  json_node_services_config.FirebaseJson::set("PORTS/PORT_4/DEPTH_4B", false); 
+
+  
+  Firebase.updateNode(firebasedata, "/Services_config/NeoLink/" + SN + "/", json_node_services_config );
+
+  print.logqq("Creating nodes in Services_controllers.");
+
+  for (int i = 1; !Firebase.updateNode(firebasedata, "/Services_controllers_Flags/NeoLink/" + SN + "/", json_node_controllers_flag );; i++)  i>3 ? deepsleep(NO_INTERNET_DESPITE_PING, print, "Attemps Failed.") : print.logq(" Updating failed. Attemp: ", i);
+  
+  print.logqq("Done.");
+  print.logqq("Creating nodes in Services_config.");
+
+  for (int i = 1; !Firebase.updateNode(firebasedata,"/Services_config/NeoLink/" + SN + "/", json_node_services_config );; i++)  i>3 ? deepsleep(NO_INTERNET_DESPITE_PING, print, "Attemps Failed.") : print.logq(" Updating failed. Attemp: ", i);
+  print.logqq("Done.");  
+
+
+}
+
+
+void update_SN(vprint print){
+
+  print.logq("Checking for SN json updates.");
+
+  //getting sn_update_flag 
+  //if update_sn_flag = 1 and SN ! = SN from firebase. Update eeprom
+  //A problem appears when get json in firebase data fail and it create new nodes. Is better to have a
+  //initial settings program. 
+  int sn_update_flag;
+  String default_sn = "0000000000000";
+  int sn_as_default = 0;
+
+  String json_definition_origin =  "/SN_Chips/" + chipid_str + "/";
+
+  
+
+  if(SN == default_sn ) {
+    print.logqq ("Current SN is default_sn. Checking if sn_update_flag is set. Otherwise will reset.");
+    sn_as_default = 1;
+  } 
+  
+  //else{
+
+  for (int i = 1; ! Firebase.getInt(firebasedata, json_definition_origin + "SN_UPDATE_FLAG") ; i++) i>4 ? deepsleep(NO_INTERNET_DESPITE_PING, print, "Attemps Failed.") : print.logq("Getting local_update_firmware failed. Attemp: ", i);
+   sn_update_flag = firebasedata.intData();
+  
+  //}
+
+  if( !sn_update_flag && sn_as_default ) {
+     print.logqq("SN has the default value and sn_update is not set. Resetting..");
+     if(MODE_PRG) handleCommands("SoftReset");
+     else deepsleep( DEFAULT_SN_SLEEPTIME, print, "Sleeping DEFAULT_SN_SLEEPTIME");
+  }
+
+  if(sn_update_flag ){
+    
+    for (int i = 1; !Firebase.get(firebasedata, json_definition_origin) ; i++) i>4 ? deepsleep(NO_INTERNET_DESPITE_PING, print, "Attemps Failed.") : print.logq("Getting jsondata failed. Attemp: ", i);
+  
+    String* response = get_firebase_json_str(print);
+    String fb_DEVICE_HEADER = get_value_json_str(response, "DEVICE_HEADER");
+    String fb_HARDWARE_VERSION= get_value_json_str(response, "HARDWARE_VERSION");
+    String fb_ENVIRONMENT= get_value_json_str(response, "ENVIRONMENT");
+    String fb_DATE_CORR_AAMM= get_value_json_str(response, "DATE_CORR_AAMM");
+    String fb_SN_CORR_AAMM= get_value_json_str(response, "SN_CORR_AAMM");
+
+    if(fb_DEVICE_HEADER == "00") print.logqq("Not update because the SN in Firebase has the default value chipid");
+   
+    else{
+
+    String fb_SN = fb_DEVICE_HEADER + fb_HARDWARE_VERSION + fb_ENVIRONMENT + fb_DATE_CORR_AAMM + fb_SN_CORR_AAMM;
+
+    
+    if(fb_SN == SN) print.logqq("Nothing change because SN parameters in firebase is the same.") ;
+
+    else{
+      print.logqq("Firebase SN: ", fb_SN);
+      print.logqq("EEPROM SN: ", SN);
+      print.logqq("Updating SN and saving in EEPROM.");
+      SN = fb_SN;
+      write_eeprom(SN, 0, print);
+          
+      print.logqq("Creating nodes:");  
+      create_nodes(print); 
+     
+
+    }
+
+    
+    }
+
+  print.logqq("Setting SN_UPDATE_FLAG to 0");
+  for (int i = 1; !Firebase.setInt(firebasedata,  json_definition_origin + "SN_UPDATE_FLAG", 0) ; i++) i>3 ? deepsleep(NO_INTERNET_DESPITE_PING, print, "Attemps Failed.") : print.logq(" Updating failed. Attemp: ", i);
+  
+
+  }
+  else print.logqq("SN update not required.");
+
+}
+
+void reading_controller_flags(vprint print){
+  print.logq("Checking for configurations.");
+  String json_firebase_path =  "/Services_controllers_flags/" + SN + "/";
+
+
+
+}
+
+
 void check_configuration(vprint print){
 
     print.logq("Checking for configurations.");
 
-    //getting update_sn_flag and new_config_flags
-    //get sn by chipid and compare. if is the same update_sn_flag = 1 and 
-    //well ... the sn will update and check if nodes in firebase related exist. 
-    
-    FirebaseJsonData SN_Chip_firebase_data;
-    FirebaseJson SN_Chip_firebase;
-    String SN_Chip_str;
-
-    if(Firebase.get(firebasedata, "/SN_Chips/" + chipid_str + "/")) {
-      Serial.println(firebasedata.dataType());
-
-      firebasedata.jsonObject().toString(SN_Chip_str,true);
-      Serial.println(SN_Chip_str);
-    
-/*
-      String buff_string_SN_Chip;
-      SN_Chip_firebase.toString(buff_string_SN_Chip,true);
-      print.logqq("Looking for SN_Chip_Firebase: ");
-      print.logqq(buff_string_SN_Chip); */
-      
-      
-      }
-    else {
-      print.logqq("SN not found.");
-      create_SN_nodes(print);
-    
-    }
-    
- 
 
 
-    //Update_Local_Info_Chip(print, update_local_info_flag);
 
-    /*Firebase.getInt(firebasedata, "Services_controllers_Flags/Devices/" + SN + "/local_update_firmware"); 
-    local_update_firmware = firebasedata.intData();
-    Firebase.getInt(firebasedata, "Services_controllers_Flags/Devices/" + SN + "/update_config_flag"); 
-    update_config_flag = firebasedata.intData();
-    Firebase.getInt(firebasedata, "Services_controllers_Flags/Devices/" + SN + "/update_local_info_flag"); 
-    update_local_info_flag = firebasedata.intData();
 
-    print.logq(local_update_firmware);
-    print.logq(update_config_flag);
-    print.logq(update_local_info_flag);*/
+
+
+
+  
 
 }
   
@@ -608,19 +794,13 @@ print.logq("Checking for new configurations in firebase. " );
 
 }
 
-void write_eeprom(String string_to_eeprom, int position){
+void write_eeprom(String string_to_eeprom, int position, vprint print){
 
  
-  for (size_t i = 0; i <  string_to_eeprom.length() ; i++)
-  {
-    EEPROM.write(i+position,string_to_eeprom[i]);
-    Serial.print("Saving ");
-     Serial.print(string_to_eeprom[i]);
-     Serial.print("in ");
-     Serial.print( i + position);
-  }
-
+  for (size_t i = 0; i <  string_to_eeprom.length() ; i++) EEPROM.write(i+position,string_to_eeprom[i]);
   EEPROM.commit(); 
+
+  print.logqq("\tDone. Bytes saved: ", int (string_to_eeprom.length()));
   
   
 }
@@ -643,7 +823,6 @@ String read_eeprom(int init, int len){
 
   return String(eeprom_to_read);
 }
-
 
 void print_controller_status(vprint print){
   print.logq("Running in modes:");
@@ -692,14 +871,14 @@ void starting_wifi(vprint print) {
         init_timestamp = millis();
         WiFi.begin(WIFI_SSID, WIFI_PSSWD);
 
-        print.logqq("ERROR: "+ String(WiFi.status()) +  "Attempt: " +  String(wifi_try) );
+        print.logqq("ERROR: "+ String(WiFi.status()) +  ". Attempt: " +  String(wifi_try) );
 
         wifi_try++;
 
         if (wifi_try > 3) {
 
           print.logqq("WiFi refuses connection. Sleeping..");
-          Stage = 0;
+          Stage = 1;
           deepsleep(1,print);
         }
 
@@ -885,6 +1064,17 @@ void deepsleep(int time2sleep, vprint print) {
  
   esp_sleep_enable_timer_wakeup(time2sleep * uS_TO_S_FACTOR);
   print.logq("Going to sleep for " + String(time2sleep), " seconds");
+  
+  delay(1000);
+  esp_deep_sleep_start();
+
+}
+
+void deepsleep(int time2sleep, vprint print, String message) {
+ 
+  print.logq(message);
+  esp_sleep_enable_timer_wakeup(time2sleep * uS_TO_S_FACTOR);
+  print.logqq("Sleeping for " + String(time2sleep), " seconds");
   
   delay(1000);
   esp_deep_sleep_start();
