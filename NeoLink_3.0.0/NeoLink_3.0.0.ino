@@ -622,18 +622,20 @@ void create_SN_nodes(vprint print) {
 }
 
 void create_nodes(vprint print) {
+
+  neoFirebaseJson json_node_controllers_flag;
+  neoFirebaseJson json_node_services_config;
   //checking if default nodes exist, otherwise...
   //19.06 15:19 is absurd. I decided to create the default nodes in every case if SN changes.
   print.logq("Creating nodes with default values for " + SN);
 
   json_node_controllers_flag.FirebaseJson::set("local_update_firmware", 0); 
   json_node_controllers_flag.FirebaseJson::set("update_config_flag", 0); 
-
-  neoFirebaseJson json_node_services_config;
+  
   json_node_services_config.FirebaseJson::set("LATITUDE", 0.0); 
   json_node_services_config.FirebaseJson::set("LONGITUDE", 0.0); 
-  json_node_services_config.FirebaseJson::set("BAT_H", 0.0); 
-  json_node_services_config.FirebaseJson::set("BAT_L", 0.0); 
+  json_node_services_config.FirebaseJson::set("BAT_H", 3.4); 
+  json_node_services_config.FirebaseJson::set("BAT_L", 3.2); 
   json_node_services_config.FirebaseJson::set("BEEP_INIT", false); 
   json_node_services_config.FirebaseJson::set("BEEP_END", false); 
   json_node_services_config.FirebaseJson::set("DAY_SLEEP_HOUR", 8); 
@@ -665,12 +667,12 @@ void create_nodes(vprint print) {
 
   print.logqq("Creating nodes in Services_controllers.");
 
-  for (int i = 1; !Firebase.updateNode(firebasedata, "/Services_controllers_Flags/NeoLink/" + SN + "/", json_node_controllers_flag );; i++)  i>3 ? deepsleep(NO_INTERNET_DESPITE_PING, print, "Attemps Failed.") : print.logq(" Updating failed. Attemp: ", i);
+  for (int i = 1; !Firebase.updateNode(firebasedata, "/Services_controllers_Flags/NeoLink/" + SN + "/", json_node_controllers_flag ); i++)  i>3 ? deepsleep(NO_INTERNET_DESPITE_PING, print, "Attemps Failed.") : print.logq(" Updating failed. Attemp: ", i);
   
   print.logqq("Done.");
   print.logqq("Creating nodes in Services_config.");
 
-  for (int i = 1; !Firebase.updateNode(firebasedata,"/Services_config/NeoLink/" + SN + "/", json_node_services_config );; i++)  i>3 ? deepsleep(NO_INTERNET_DESPITE_PING, print, "Attemps Failed.") : print.logq(" Updating failed. Attemp: ", i);
+  for (int i = 1; !Firebase.updateNode(firebasedata,"/Services_config/NeoLink/" + SN + "/", json_node_services_config ); i++)  i>3 ? deepsleep(NO_INTERNET_DESPITE_PING, print, "Attemps Failed.") : print.logq(" Updating failed. Attemp: ", i);
   print.logqq("Done.");  
 
 
