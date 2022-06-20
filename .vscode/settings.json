@@ -1,0 +1,23 @@
+{   
+    "editor.fontSize": 11.5,
+    "scm.inputFontSize": 12,
+    "debug.console.fontSize": 12,
+    "markdown.preview.fontSize": 12,
+    "terminal.integrated.fontSize": 12,
+    "editor.fontWeight": "normal",
+
+    "C_Cpp.errorSquiggles": "Disabled",
+    "files.associations": {
+        "cmath": "cpp",
+        "xlocale": "cpp",
+        "xstring": "cpp",
+        "xutility": "cpp",
+        "string": "cpp"
+    },
+    "C_Cpp.intelliSenseEngineFallback": "Disabled",
+    "arduino.disableIntelliSenseAutoGen": true,
+    "C_Cpp.intelliSenseEngine": "Default"
+
+    
+    
+}
