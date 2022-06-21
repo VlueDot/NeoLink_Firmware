@@ -128,6 +128,38 @@ String HARDWARE_VERSION_FIRMWARE = "03";
 #define DEFAULT_SN_SLEEPTIME 60
 
 
+const int ATMOS_RQ_eeprom = 15;
+const  int BAT_H_eeprom = 16;
+const  int BAT_L_eeprom = 20;
+const  int BEEP_END_eeprom = 24;
+const  int BEEP_INIT_eeprom = 25;
+const  int DAY_SLEEPTIME_eeprom = 26;
+const  int DAY_SLEEP_HOUR_eeprom = 30; 
+const  int LATITUDE_eeprom =34;
+const  int LONGITUDE_eeprom = 38;
+const  int NIGHT_SLEEPTIME_eeprom =42;
+const  int NIGHT_SLEEP_HOUR_eeprom = 46; 
+const  int PORT_RQ_eeprom = 50;
+const  int SD_ENABLE_eeprom = 51;
+const  int PORT_1_ENABLE_eeprom = 66;
+const  int DEPTH_1A_eeprom = 67;
+const  int DEPTH_1B_eeprom = 71;
+const  int PORT_2_ENABLE_eeprom = 75;
+const  int DEPTH_2A_eeprom = 76;
+const  int DEPTH_2B_eeprom = 80;
+const  int PORT_3_ENABLE_eeprom = 84;
+const  int DEPTH_3A_eeprom = 85;
+const  int DEPTH_3B_eeprom = 89;
+const  int PORT_4_ENABLE_eeprom = 93;
+const  int DEPTH_4A_eeprom = 94;
+const  int DEPTH_4B_eeprom = 98;
+const  int PORT_5_ENABLE_eeprom = 102;
+const  int DEPTH_5A_eeprom = 103;
+const  int DEPTH_5B_eeprom = 107;
+const  int PORT_6_ENABLE_eeprom = 111;
+const  int DEPTH_6A_eeprom = 112;
+const  int DEPTH_6B_eeprom = 116;
+
 
 
 
@@ -187,20 +219,28 @@ RTC_DATA_ATTR bool PORT_RQ = false;
 RTC_DATA_ATTR bool SD_ENABLE = false;
 
 RTC_DATA_ATTR bool PORT_1_ENABLE = false;
-RTC_DATA_ATTR int PORT_1_DEPTH_A = 0;
-RTC_DATA_ATTR int PORT_1_DEPTH_B = 0;
+RTC_DATA_ATTR int DEPTH_1A = 0;
+RTC_DATA_ATTR int DEPTH_1B = 0;
 
 RTC_DATA_ATTR bool PORT_2_ENABLE = false;
-RTC_DATA_ATTR int PORT_2_DEPTH_A = 0;
-RTC_DATA_ATTR int PORT_2_DEPTH_B = 0;
+RTC_DATA_ATTR int DEPTH_2A = 0;
+RTC_DATA_ATTR int DEPTH_2B = 0;
 
 RTC_DATA_ATTR bool PORT_3_ENABLE = false;
-RTC_DATA_ATTR int PORT_3_DEPTH_A = 0;
-RTC_DATA_ATTR int PORT_3_DEPTH_B = 0;
+RTC_DATA_ATTR int DEPTH_3A = 0;
+RTC_DATA_ATTR int DEPTH_3B = 0;
 
 RTC_DATA_ATTR bool PORT_4_ENABLE = false;
-RTC_DATA_ATTR int PORT_4_DEPTH_A = 0;
-RTC_DATA_ATTR int PORT_4_DEPTH_B = 0;
+RTC_DATA_ATTR int DEPTH_4A = 0;
+RTC_DATA_ATTR int DEPTH_4B = 0;
+
+RTC_DATA_ATTR bool PORT_5_ENABLE = false;
+RTC_DATA_ATTR int DEPTH_5A = 0;
+RTC_DATA_ATTR int DEPTH_5B = 0;
+
+RTC_DATA_ATTR bool PORT_6_ENABLE = false;
+RTC_DATA_ATTR int DEPTH_6A = 0;
+RTC_DATA_ATTR int DEPTH_6B = 0;
 
 
 
@@ -691,6 +731,7 @@ bool ping(vprint print){
 }  
 
 void create_SN_nodes(vprint print) {
+  // must executed in a different program
   print.logq("Creating SN nodes for " + chipid_str);
 
   neoFirebaseJson json_SN_nodes;
@@ -724,7 +765,7 @@ void create_nodes(vprint print) {
   json_node_controllers_flag.FirebaseJson::set("local_specific_firmware_update", false); 
   json_node_controllers_flag.FirebaseJson::set("local_specific_firmware_version", firmware_version);
 
-  json_node_controllers_flag.FirebaseJson::set("update_config_flag", false); 
+  json_node_controllers_flag.FirebaseJson::set("update_config_flag", true); 
 
   
   json_node_services_config.FirebaseJson::set("LATITUDE", -8.078078); 
@@ -741,21 +782,30 @@ void create_nodes(vprint print) {
   json_node_services_config.FirebaseJson::set("ATMOS_RQ", false); 
   json_node_services_config.FirebaseJson::set("SD_ENABLE", false); 
   
-  json_node_services_config.FirebaseJson::set("PORTS/PORT_1/ENABLE", false); 
+  json_node_services_config.FirebaseJson::set("PORTS/PORT_1/PORT_1_ENABLE", false); 
   json_node_services_config.FirebaseJson::set("PORTS/PORT_1/DEPTH_1A", 0);
   json_node_services_config.FirebaseJson::set("PORTS/PORT_1/DEPTH_1B", 0); 
 
-  json_node_services_config.FirebaseJson::set("PORTS/PORT_2/ENABLE", false); 
+  json_node_services_config.FirebaseJson::set("PORTS/PORT_2/PORT_2_ENABLE", false); 
   json_node_services_config.FirebaseJson::set("PORTS/PORT_2/DEPTH_2A", 0);
   json_node_services_config.FirebaseJson::set("PORTS/PORT_2/DEPTH_2B", 0); 
 
-  json_node_services_config.FirebaseJson::set("PORTS/PORT_3/ENABLE", false); 
+  json_node_services_config.FirebaseJson::set("PORTS/PORT_3/PORT_3_ENABLE", false); 
   json_node_services_config.FirebaseJson::set("PORTS/PORT_3/DEPTH_3A", 0);
   json_node_services_config.FirebaseJson::set("PORTS/PORT_3/DEPTH_3B", 0); 
 
-  json_node_services_config.FirebaseJson::set("PORTS/PORT_4/ENABLE", false); 
+  json_node_services_config.FirebaseJson::set("PORTS/PORT_4/PORT_4_ENABLE", false); 
   json_node_services_config.FirebaseJson::set("PORTS/PORT_4/DEPTH_4A", 0);
   json_node_services_config.FirebaseJson::set("PORTS/PORT_4/DEPTH_4B", 0); 
+
+  json_node_services_config.FirebaseJson::set("PORTS/PORT_5/PORT_5_ENABLE", false); 
+  json_node_services_config.FirebaseJson::set("PORTS/PORT_5/DEPTH_5A", 0);
+  json_node_services_config.FirebaseJson::set("PORTS/PORT_5/DEPTH_5B", 0); 
+
+  json_node_services_config.FirebaseJson::set("PORTS/PORT_6/PORT_6_ENABLE", false); 
+  json_node_services_config.FirebaseJson::set("PORTS/PORT_6/DEPTH_6A", 0);
+  json_node_services_config.FirebaseJson::set("PORTS/PORT_6/DEPTH_6B", 0); 
+
 
   
   Firebase.updateNode(firebasedata, "/Services_config/NeoLink/" + SN + "/", json_node_services_config );
@@ -938,28 +988,105 @@ print.logq("Reading Services_controller_Flags:");
 
 void read_configuration(vprint print){
 
-    print.logq("Reading configurations in eeprom.");
+  print.logq("Reading configurations in eeprom.");
 
-
-
-
-
-
-
-
+  ATMOS_RQ = EEPROM.readBool(ATMOS_RQ_eeprom);
+  BAT_H = EEPROM.readFloat(BAT_H_eeprom);
+  BAT_L = EEPROM.readFloat(BAT_L_eeprom);
+  BEEP_END = EEPROM.readBool(BEEP_END_eeprom);
+  BEEP_INIT = EEPROM.readBool(BEEP_INIT_eeprom);
+  DAY_SLEEPTIME = EEPROM.readInt(DAY_SLEEPTIME_eeprom);
+  DAY_SLEEP_HOUR = EEPROM.readInt(DAY_SLEEP_HOUR_eeprom);
+  LATITUDE = EEPROM.readFloat(LATITUDE_eeprom);
+  LONGITUDE = EEPROM.readFloat(LONGITUDE_eeprom);
+  NIGHT_SLEEPTIME = EEPROM.readInt(NIGHT_SLEEPTIME_eeprom);
+  NIGHT_SLEEP_HOUR = EEPROM.readInt(NIGHT_SLEEP_HOUR_eeprom);
+  PORT_RQ = EEPROM.readBool(PORT_RQ_eeprom);
+  SD_ENABLE = EEPROM.readBool(SD_ENABLE_eeprom);
   
+  PORT_1_ENABLE = EEPROM.readBool(PORT_1_ENABLE_eeprom); 
+  DEPTH_1A = EEPROM.readInt(DEPTH_1A_eeprom);
+  DEPTH_1B = EEPROM.readInt(DEPTH_1B_eeprom);
+
+  PORT_2_ENABLE = EEPROM.readBool(PORT_2_ENABLE_eeprom);
+  DEPTH_2A = EEPROM.readInt(DEPTH_2A_eeprom);
+  DEPTH_2B = EEPROM.readInt(DEPTH_2B_eeprom);
+
+  PORT_3_ENABLE = EEPROM.readBool(PORT_3_ENABLE_eeprom);
+  DEPTH_3A = EEPROM.readInt(DEPTH_3A_eeprom);
+  DEPTH_3B = EEPROM.readInt(DEPTH_3B_eeprom);
+
+  PORT_4_ENABLE = EEPROM.readBool(PORT_4_ENABLE_eeprom);
+  DEPTH_4A = EEPROM.readInt(DEPTH_4A_eeprom);
+  DEPTH_4B = EEPROM.readInt(DEPTH_4B_eeprom);
+
+  PORT_5_ENABLE = EEPROM.readBool(PORT_5_ENABLE_eeprom);
+  DEPTH_5A = EEPROM.readInt(DEPTH_5A_eeprom);
+  DEPTH_5B = EEPROM.readInt(DEPTH_5B_eeprom);
+
+  PORT_6_ENABLE = EEPROM.readBool(PORT_6_ENABLE_eeprom); 
+  DEPTH_6A = EEPROM.readInt(DEPTH_6A_eeprom);
+  DEPTH_6B = EEPROM.readInt(DEPTH_6B_eeprom);
+
+  print.logqqq("ATMOS_RQ: ", ATMOS_RQ ? "true":"false" );
+  print.logqqq("BAT_H: ", String(BAT_H,3));
+  print.logqqq("BAT_L: ", String(BAT_L,3));
+  print.logqqq("BEEP_END: ", BEEP_END ? "true":"false" );
+  print.logqqq("BEEP_INIT: ", BEEP_INIT ? "true":"false");
+  print.logqqq("DAY_SLEEPTIME: ", String(DAY_SLEEPTIME));
+  print.logqqq("DAY_SLEEP_HOUR: ", String(DAY_SLEEP_HOUR));
+  print.logqqq("LATITUDE: ", String(LATITUDE,8));
+  print.logqqq("LONGITUDE: ", String(LONGITUDE,8));
+  print.logqqq("NIGHT_SLEEPTIME: ", String(NIGHT_SLEEPTIME));
+  print.logqqq("NIGHT_SLEEP_HOUR: ", String(NIGHT_SLEEP_HOUR));
+  print.logqqq("PORT_RQ: ", PORT_RQ ? "true":"false" );
+  print.logqqq("SD_ENABLE: ", SD_ENABLE ? "true":"false" );
+
+  delay(250); //because WS_MAX_QUEUED_MESSAGES in asyn TCP
+
+  print.logqqq("PORT_1_ENABLE: ", PORT_1_ENABLE ? "true":"false");
+  print.logqqq("DEPTH_1A: ", String(DEPTH_1A));
+  print.logqqq("DEPTH_1B: ", String(DEPTH_1B));
+
+  print.logqqq("PORT_2_ENABLE: ", PORT_2_ENABLE ? "true":"false");
+  print.logqqq("DEPTH_2A: ", String(DEPTH_2A));
+  print.logqqq("DEPTH_2B: ", String(DEPTH_2B));
+
+  print.logqqq("PORT_3_ENABLE: ", PORT_3_ENABLE ? "true":"false");
+  print.logqqq("DEPTH_3A: ", String(DEPTH_3A));
+  print.logqqq("DEPTH_3B: ", String(DEPTH_3B));
+
+  print.logqqq("PORT_4_ENABLE: ", PORT_4_ENABLE ? "true":"false");
+  print.logqqq("DEPTH_4A: ", String(DEPTH_4A));
+  print.logqqq("DEPTH_4B: ", String(DEPTH_4B));
+
+  print.logqqq("PORT_5_ENABLE: ", PORT_5_ENABLE ? "true":"false");
+  print.logqqq("DEPTH_5A: ", String(DEPTH_5A));
+  print.logqqq("DEPTH_5B: ", String(DEPTH_5B));
+
+  print.logqqq("PORT_6_ENABLE: ", PORT_6_ENABLE ? "true":"false");
+  print.logqqq("DEPTH_6A: ", String(DEPTH_6A));
+  print.logqqq("DEPTH_6B: ", String(DEPTH_6B));
+
+  print.logqq("Reading configurations in eeprom success:");
+
 
 }
 
 void get_firebase_configuration(vprint print){
 
-const String configurations_path = "/Services_config/NeoLink";
+  //see https://docs.google.com/spreadsheets/d/1y-FEoacuGQVNXTLEPXn3_XlkA6E7z7mzDyGfZqTUZtc/edit#gid=1587879252
+  // TODO: must create const variables for the eeprom constat locations
+
+const String configurations_path = "/Services_config/NeoLink/" + SN;
 
 
 if( Firebase.get(firebasedata, configurations_path)) {
   print.logq("New configuration received.");
   String* response = get_firebase_json_str(print);
 
+  //for (size_t i = 1; i < response[0].toInt(); i++) print.logqq( String(int(i)), response[i]);
+  
   ATMOS_RQ = str_to_bool( get_value_json_str(response, "ATMOS_RQ"), print);
   BAT_H = get_value_json_str(response, "BAT_H").toFloat();
   BAT_L = get_value_json_str(response, "BAT_L").toFloat();
@@ -973,53 +1100,91 @@ if( Firebase.get(firebasedata, configurations_path)) {
   NIGHT_SLEEP_HOUR = get_value_json_str(response, "NIGHT_SLEEP_HOUR").toInt();
   PORT_RQ = str_to_bool( get_value_json_str(response, "PORT_RQ"), print);
   SD_ENABLE = str_to_bool( get_value_json_str(response, "SD_ENABLE"), print);
-  
+    
   PORT_1_ENABLE = str_to_bool( get_value_json_str(response, "PORT_1_ENABLE"), print);
-  PORT_1_DEPTH_A = get_value_json_str(response, "PORT_1_DEPTH_A").toInt();
-  PORT_1_DEPTH_B = get_value_json_str(response, "PORT_1_DEPTH_B").toInt();
+  DEPTH_1A = get_value_json_str(response, "DEPTH_1A").toInt();
+  DEPTH_1B = get_value_json_str(response, "DEPTH_1B").toInt();
 
   PORT_2_ENABLE = str_to_bool( get_value_json_str(response, "PORT_2_ENABLE"), print);
-  PORT_2_DEPTH_A = get_value_json_str(response, "PORT_2_DEPTH_A").toInt();
-  PORT_2_DEPTH_B = get_value_json_str(response, "PORT_2_DEPTH_B").toInt();
-
+  DEPTH_2A = get_value_json_str(response, "DEPTH_2A").toInt();
+  DEPTH_2B = get_value_json_str(response, "DEPTH_2B").toInt();
 
   PORT_3_ENABLE = str_to_bool( get_value_json_str(response, "PORT_3_ENABLE"), print);
-  PORT_3_DEPTH_A = get_value_json_str(response, "PORT_3_DEPTH_A").toInt();
-  PORT_3_DEPTH_B = get_value_json_str(response, "PORT_3_DEPTH_B").toInt();
-
+  DEPTH_3A = get_value_json_str(response, "DEPTH_3A").toInt();
+  DEPTH_3B = get_value_json_str(response, "DEPTH_3B").toInt();
 
   PORT_4_ENABLE = str_to_bool( get_value_json_str(response, "PORT_4_ENABLE"), print);
-  PORT_4_DEPTH_A = get_value_json_str(response, "PORT_4_DEPTH_A").toInt();
-  PORT_4_DEPTH_B = get_value_json_str(response, "PORT_4_DEPTH_B").toInt();
-
-
-
-  Serial.println(String(LONGITUDE,8));
-
-  print.logqq("Longitud: ", LONGITUDE);
-
-
+  DEPTH_4A = get_value_json_str(response, "DEPTH_4A").toInt();
+  DEPTH_4B = get_value_json_str(response, "DEPTH_4B").toInt();
   
-    
+  PORT_5_ENABLE = str_to_bool( get_value_json_str(response, "PORT_5_ENABLE"), print);
+  DEPTH_5A = get_value_json_str(response, "DEPTH_5A").toInt();
+  DEPTH_5B = get_value_json_str(response, "DEPTH_5B").toInt();
+  
+  PORT_6_ENABLE = str_to_bool( get_value_json_str(response, "PORT_6_ENABLE"), print);
+  DEPTH_6A = get_value_json_str(response, "DEPTH_6A").toInt();
+  DEPTH_6B = get_value_json_str(response, "DEPTH_6B").toInt();
+  
+  
+ 
+  
+
+  if(ATMOS_RQ != EEPROM.readBool(ATMOS_RQ_eeprom)) EEPROM.writeBool(ATMOS_RQ_eeprom, ATMOS_RQ);
+  if(BAT_H != EEPROM.readFloat(BAT_H_eeprom)) EEPROM.writeFloat(BAT_H_eeprom, BAT_H);
+  if(BAT_L != EEPROM.readFloat(BAT_L_eeprom)) EEPROM.writeFloat(BAT_L_eeprom, BAT_L);
+  if(BEEP_END != EEPROM.readBool(BEEP_END_eeprom)) EEPROM.writeBool(BEEP_END_eeprom, BEEP_END);
+  if(BEEP_INIT != EEPROM.readBool(BEEP_INIT_eeprom)) EEPROM.writeBool(BEEP_INIT_eeprom, BEEP_INIT);
+  if(DAY_SLEEPTIME != EEPROM.readInt(DAY_SLEEPTIME_eeprom)) EEPROM.writeInt(DAY_SLEEPTIME_eeprom, DAY_SLEEPTIME);
+  if(DAY_SLEEP_HOUR != EEPROM.readInt(DAY_SLEEP_HOUR_eeprom)) EEPROM.writeInt(DAY_SLEEP_HOUR_eeprom, DAY_SLEEP_HOUR);
+  if(LATITUDE != EEPROM.readFloat(LATITUDE_eeprom)) EEPROM.writeFloat(LATITUDE_eeprom, LATITUDE);
+  if(LONGITUDE != EEPROM.readFloat(LONGITUDE_eeprom)) EEPROM.writeFloat(LONGITUDE_eeprom, LONGITUDE);
+  if(NIGHT_SLEEPTIME != EEPROM.readInt(NIGHT_SLEEPTIME_eeprom)) EEPROM.writeInt(NIGHT_SLEEPTIME_eeprom, NIGHT_SLEEPTIME);
+  if(NIGHT_SLEEP_HOUR != EEPROM.readInt(NIGHT_SLEEP_HOUR_eeprom)) EEPROM.writeInt(NIGHT_SLEEP_HOUR_eeprom, NIGHT_SLEEP_HOUR);  
+  if(PORT_RQ != EEPROM.readBool(PORT_RQ_eeprom)) EEPROM.writeBool(PORT_RQ_eeprom, PORT_RQ);
+  if(SD_ENABLE != EEPROM.readBool(SD_ENABLE_eeprom)) EEPROM.writeBool(SD_ENABLE_eeprom, SD_ENABLE);
+  
+  if(PORT_1_ENABLE != EEPROM.readBool(PORT_1_ENABLE_eeprom)) EEPROM.writeBool(PORT_1_ENABLE_eeprom, PORT_1_ENABLE);  
+  if(DEPTH_1A != EEPROM.readInt(DEPTH_1A_eeprom)) EEPROM.writeInt(DEPTH_1A_eeprom, DEPTH_1A);
+  if(DEPTH_1B != EEPROM.readInt(DEPTH_1B_eeprom)) EEPROM.writeInt(DEPTH_1B_eeprom, DEPTH_1B);
+
+  if(PORT_2_ENABLE != EEPROM.readBool(PORT_2_ENABLE_eeprom)) EEPROM.writeBool(PORT_2_ENABLE_eeprom, PORT_2_ENABLE);  
+  if(DEPTH_2A != EEPROM.readInt(DEPTH_2A_eeprom)) EEPROM.writeInt(DEPTH_2A_eeprom, DEPTH_2A);
+  if(DEPTH_2B != EEPROM.readInt(DEPTH_2B_eeprom)) EEPROM.writeInt(DEPTH_2B_eeprom, DEPTH_2B);
+
+  if(PORT_3_ENABLE != EEPROM.readBool(PORT_3_ENABLE_eeprom)) EEPROM.writeBool(PORT_3_ENABLE_eeprom, PORT_3_ENABLE);  
+  if(DEPTH_3A != EEPROM.readInt(DEPTH_3A_eeprom)) EEPROM.writeInt(DEPTH_3A_eeprom, DEPTH_3A);
+  if(DEPTH_3B != EEPROM.readInt(DEPTH_3B_eeprom)) EEPROM.writeInt(DEPTH_3B_eeprom, DEPTH_3B);
+
+  if(PORT_4_ENABLE != EEPROM.readBool(PORT_4_ENABLE_eeprom)) EEPROM.writeBool(PORT_4_ENABLE_eeprom, PORT_4_ENABLE);  
+  if(DEPTH_4A != EEPROM.readInt(DEPTH_4A_eeprom)) EEPROM.writeInt(DEPTH_4A_eeprom, DEPTH_4A);
+  if(DEPTH_4B != EEPROM.readInt(DEPTH_4B_eeprom)) EEPROM.writeInt(DEPTH_4B_eeprom, DEPTH_4B);
+
+  if(PORT_5_ENABLE != EEPROM.readBool(PORT_5_ENABLE_eeprom)) EEPROM.writeBool(PORT_5_ENABLE_eeprom, PORT_5_ENABLE);  
+  if(DEPTH_5A != EEPROM.readInt(DEPTH_5A_eeprom)) EEPROM.writeInt(DEPTH_5A_eeprom, DEPTH_5A);
+  if(DEPTH_5B != EEPROM.readInt(DEPTH_5B_eeprom)) EEPROM.writeInt(DEPTH_5B_eeprom, DEPTH_5B);
+  
+  if(PORT_6_ENABLE != EEPROM.readBool(PORT_6_ENABLE_eeprom)) EEPROM.writeBool(PORT_6_ENABLE_eeprom, PORT_6_ENABLE);  
+  if(DEPTH_6A != EEPROM.readInt(DEPTH_6A_eeprom)) EEPROM.writeInt(DEPTH_6A_eeprom, DEPTH_6A);
+  if(DEPTH_6B != EEPROM.readInt(DEPTH_6B_eeprom)) EEPROM.writeInt(DEPTH_6B_eeprom, DEPTH_6B);
+
+  EEPROM.commit();
+
+
+  print.logqq("Saved in EEPROM.");
 
 
 
-
-
-} else print.logqq("No configuration received.");
+} else print.logqq("No setting configuration detected.");
 
 print.logqq("Turning update_config_flag off.");
 for (int i = 1; !Firebase.setBool(firebasedata, "/Services_controllers_Flags/NeoLink/" + SN + "/update_config_flag" , false) ; i++) i>3 ? deepsleep(NO_INTERNET_DESPITE_PING, print, "Attemps Failed.") : print.logq(" Updating failed. Attemp: ", i);
   
 
-
-
-
 }
 
 void write_eeprom(String string_to_eeprom, int position, vprint print){
 
- 
+  
   for (size_t i = 0; i <  string_to_eeprom.length() ; i++) EEPROM.write(i+position,string_to_eeprom[i]);
   EEPROM.commit(); 
 
@@ -1030,7 +1195,7 @@ void write_eeprom(String string_to_eeprom, int position, vprint print){
 
 String read_eeprom(int init, int len){
 
-  char eeprom_to_read[80];
+  char eeprom_to_read[100];
 
   for( int i=0; i< len ; i++ ){
     eeprom_to_read[i] = char(EEPROM.read(i+init));
