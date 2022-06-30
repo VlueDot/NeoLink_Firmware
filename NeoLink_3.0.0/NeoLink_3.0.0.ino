@@ -37,7 +37,7 @@
 
 //------------- I2C ------------------------------------------------
 #include <Wire.h>
-//#include <Adafruit_Sensor.h>
+#include <Adafruit_Sensor.h>
 #include <Adafruit_BME280.h>
 
 //--------- EEPROM -----------------------    
@@ -119,10 +119,10 @@ String HARDWARE_VERSION_FIRMWARE = "03";
   #define FIREBASE_HOST "https://aidadev-71837-default-rtdb.firebaseio.com/"
   #define FIREBASE_AUTH "RbsWJ3F5EsLGLvpRefgTeyGQhEFHFp5pJfECurTE"
   #define UPDATE_JSON_URL  "https://firmware-neolink.s3-sa-east-1.amazonaws.com/firmware_pro.json"
- // const char* WIFI_SSID = "MOVISTAR_9F86";
-  //const char* WIFI_PSSWD = "9Qt6DFyaXZUG7SPkgZzn";
-  const char* WIFI_SSID = "LINUX5"; //modem default
-  const char* WIFI_PSSWD = "1a23456789abc";
+  const char* WIFI_SSID = "MOVISTAR_9F86";
+  const char* WIFI_PSSWD = "9Qt6DFyaXZUG7SPkgZzn";
+  //const char* WIFI_SSID = "LINUX5"; //modem default
+  //const char* WIFI_PSSWD = "1a23456789abc";
   
 
 #endif
@@ -275,6 +275,11 @@ RTC_DATA_ATTR float battery_voltage = -10;
 RTC_DATA_ATTR float solar_voltage = -10;
 RTC_DATA_ATTR int8_t battery_available = 1; 
 RTC_DATA_ATTR int update_sn_flag = 0 ;
+
+RTC_DATA_ATTR float dry_bulb_temp = -100;
+RTC_DATA_ATTR float barometric_pressure = -100;
+RTC_DATA_ATTR float relative_humidity = -100;
+RTC_DATA_ATTR float pressure_altitude = -100;
 
 
 //______________________________________________________________________
@@ -519,6 +524,8 @@ void atmega_force_reset(vprint print);
 bool send_peripheral_command(char command , vprint print);
 void get_atmos(vprint print);
 
+bool send_cloud(vprint print);
+
 //______________________________________________________________________
 //
 // Codigo principal
@@ -537,7 +544,7 @@ void setup(void) {
   digitalWrite(TEMP_EN, LOW);
 
   pinMode(ATMOS_EN, OUTPUT);
-  digitalWrite(ATMOS_EN, LOW);
+  digitalWrite(ATMOS_EN, HIGH);
 
   pinMode(SIM_ON, OUTPUT);
   digitalWrite(SIM_ON, HIGH);
@@ -618,6 +625,8 @@ void setup(void) {
     get_atmos(print);
 
     get_ports(print);
+
+    send_cloud(print);
     
    
     for (int i = 0; i < 20; i++)
@@ -643,44 +652,58 @@ void loop(void) {
 // Functions
 //______________________________________________________________________
 
+bool send_cloud(vprint print){
+
+  print.logq("Start send_cloud function.");
+
+  print.logqq("making json");
+
+  print.logqq("sending json to cloud");
+
+  return true;
+
+
+}
+
 #define SEALEVELPRESSURE_HPA 1015.85
 
 void get_atmos(vprint print){
 
-  float dry_bulb_temp = 0;
-  float barometric_pressure = 0;
-  float relative_humidity = 0;
-  float pressure_altitude = 0;
+  print.logq("Reading atmosferical sensor.");
 
-  for (int i = 0; i < 4; i++)
-  {
+  long unsigned timestamp = millis();
+  bool bme_status = bme_static.begin(0x76);
+  if(!bme_status) {
     
-    digitalWrite(ATMOS_EN, LOW );
-    delay(500);
-    digitalWrite(ATMOS_EN, HIGH );
-
-    if(!bme_static.begin(0x76)) print.logq("Could not find a valid BME280 sensor. Sensor ID is: 0x", String(int(bme_static.sensorID()),HEX) );
-    else {
+      print.logqq("Atmos failed. Sensor ID is: 0x", String(int(bme_static.sensorID()),HEX) );
       
-      dry_bulb_temp = bme_static.readTemperature();
-      barometric_pressure = round(bme_static.readPressure()) / 1000;
-      relative_humidity = bme_static.readHumidity();
-      pressure_altitude = bme_static.readAltitude(SEALEVELPRESSURE_HPA);
-
-
     }
-
-    delay(500);
-
-
   
-  }
-  
+  while(bme_static.readPressure()<5000 && millis() - timestamp < 15000) delay(200);  
 
-  
-    
+  if(dry_bulb_temp == -100 || barometric_pressure == -100 || relative_humidity == -100 || pressure_altitude == -100  )
+      { 
+        dry_bulb_temp = bme_static.readTemperature();
+        barometric_pressure = bme_static.readPressure() ;
+        relative_humidity = bme_static.readHumidity();
+        pressure_altitude = bme_static.readAltitude(SEALEVELPRESSURE_HPA);}
 
+  else {  
+    dry_bulb_temp = (bme_static.readTemperature() + dry_bulb_temp)/2;
+    barometric_pressure = (bme_static.readPressure() + barometric_pressure )/2;
+    relative_humidity = (bme_static.readHumidity() + relative_humidity)/2;
+    pressure_altitude = (bme_static.readAltitude(SEALEVELPRESSURE_HPA) + pressure_altitude)/2;}
+
+      print.logqq("dry_bulb_temp: ", String(dry_bulb_temp,3));
+      print.logqq("barometric_pressure: ", String(barometric_pressure/1000.00,3));
+      print.logqq("relative_humidity: ", String(relative_humidity,3));
+      print.logqq("pressure_altitude: ", String(pressure_altitude,3));
+
+      return;
+      
+      
 }
+ 
 
 String* get_firebase_json_str(vprint print){
   /*get json from firebase as ordered string*/
