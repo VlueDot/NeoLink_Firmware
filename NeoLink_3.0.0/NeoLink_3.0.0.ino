@@ -34,6 +34,12 @@
 //--------- INTERNAL TEMP ----------------
 #include <OneWire.h>
 #include <DallasTemperature.h>
+
+//------------- I2C ------------------------------------------------
+#include <Wire.h>
+//#include <Adafruit_Sensor.h>
+#include <Adafruit_BME280.h>
+
 //--------- EEPROM -----------------------    
 #include <EEPROM.h>
 //-----------------------------Firebase & Servers-------------------------------------
@@ -67,6 +73,8 @@ const byte esp32_TX___ard_RX = 17;
 
 #define SIM_ON 4
 #define ATMEGA_FORCED_RESET_PIN 2
+
+//https://resource.heltec.cn/download/WiFi_LoRa_32/WIFI_LoRa_32_V2.pdf
 
 //______________________________________________________________________
 //
@@ -111,8 +119,10 @@ String HARDWARE_VERSION_FIRMWARE = "03";
   #define FIREBASE_HOST "https://aidadev-71837-default-rtdb.firebaseio.com/"
   #define FIREBASE_AUTH "RbsWJ3F5EsLGLvpRefgTeyGQhEFHFp5pJfECurTE"
   #define UPDATE_JSON_URL  "https://firmware-neolink.s3-sa-east-1.amazonaws.com/firmware_pro.json"
-  const char* WIFI_SSID = "MOVISTAR_9F86";
-  const char* WIFI_PSSWD = "9Qt6DFyaXZUG7SPkgZzn";
+ // const char* WIFI_SSID = "MOVISTAR_9F86";
+  //const char* WIFI_PSSWD = "9Qt6DFyaXZUG7SPkgZzn";
+  const char* WIFI_SSID = "LINUX5"; //modem default
+  const char* WIFI_PSSWD = "1a23456789abc";
   
 
 #endif
@@ -127,6 +137,7 @@ String HARDWARE_VERSION_FIRMWARE = "03";
 
 #define DEFAULT_SN_SLEEPTIME 60
 
+//EEPROM const address
 
 const int ATMOS_RQ_eeprom = 15;
 const  int BAT_H_eeprom = 16;
@@ -199,6 +210,9 @@ const int   daylightOffset_sec = 0;
 //Own
 Beep beep(BEEP);
 
+//I2C
+Adafruit_BME280 bme_static;
+
 //Internal Temperature
 OneWire oneWire(TEMP_VALUE);
 DallasTemperature sensors(&oneWire);
@@ -261,10 +275,6 @@ RTC_DATA_ATTR float battery_voltage = -10;
 RTC_DATA_ATTR float solar_voltage = -10;
 RTC_DATA_ATTR int8_t battery_available = 1; 
 RTC_DATA_ATTR int update_sn_flag = 0 ;
-
-
-
-
 
 
 //______________________________________________________________________
@@ -479,7 +489,6 @@ vprint print;
 int checking_battery(vprint print);
 void deepsleep(int time2sleep, vprint print);
 int check_WiFi(vprint print, int millis_delay);
-void atmega_force_reset(vprint print);
 void turn_modem_on(vprint print);
 void handleCommands(String data);
 void handleCommands(String data, int timeToSleep);
@@ -500,6 +509,15 @@ void deepsleep(int time2sleep, vprint print, String message);
 void update_SN(vprint print);
 bool str_to_bool(String bool_str, vprint print);
 void get_firebase_configuration(vprint print);
+
+void  get_ports(vprint print);
+
+void force_hardware_reset(vprint print);
+void atmega_soft_reset(vprint print);
+void atmega_force_reset(vprint print);
+
+bool send_peripheral_command(char command , vprint print);
+void get_atmos(vprint print);
 
 //______________________________________________________________________
 //
@@ -525,6 +543,7 @@ void setup(void) {
   digitalWrite(SIM_ON, HIGH);
 
   pinMode(ATMEGA_FORCED_RESET_PIN, OUTPUT);
+  digitalWrite(ATMEGA_FORCED_RESET_PIN, LOW);
 
   pinMode(PIN_WIFI_STATUS, INPUT);
 
@@ -534,6 +553,7 @@ void setup(void) {
   //delay(1000);
 
   Serial.begin(115200);
+  ArdSerial.begin(57600);
   EEPROM.begin(150);
   
   //Stage =1;
@@ -541,6 +561,9 @@ void setup(void) {
     Serial.println();
     Serial.println("___________________________________________________");
     print.logq("Greenbird AG - AIDA | NeoLink Firmware Version: ", firmware_version);
+
+    //physical forced reset Atmega328pu. Prevention
+    atmega_force_reset(print);
 
     if (Start_or_Restart) beep.vbeep(250);
 
@@ -552,9 +575,6 @@ void setup(void) {
 
     print.logq("[STAGE 1]: ");
     if (!checking_battery(print)) deepsleep(POWERLESS_TIME,print);
-
-   
-
     
     if (!check_WiFi(print,3000)) turn_modem_on(print);
     
@@ -562,6 +582,7 @@ void setup(void) {
 
     Stage = 2; //Habilito el siguiente paso
 
+    
 
     if(MODE_PRG) deepsleep(1,print);
     else deepsleep(SLEEP_TIME_STAGE_1, print);
@@ -572,21 +593,18 @@ void setup(void) {
     Serial.println("___________________________________________________");
     print.logq("[STAGE 2]: ");
 
-    //getting SN an MAC, again..
-    get_SN_n_MAC(print); 
-
-    //physical forced reset Atmega328pu. Why?
-    atmega_force_reset(print);
+    //activate sensors read
+    if(send_peripheral_command('s',print)) print.logq("Reading ports started.");
 
     // Connect to WiFi network
     if(check_WiFi(print,500)) starting_wifi(print);
     else { Stage = 1 ; turn_modem_on(print); handleCommands("SoftReset"); }
-
+    
     // Enabling local server if is required
-    if(LOCAL_SERVER){  ws.onEvent(onEvent); server.addHandler(&ws); start_server(print);}
-
-    //wait time to refresh your web
-    //if(LOCAL_SERVER) delay(5000);
+    if(LOCAL_SERVER){ws.onEvent(onEvent); server.addHandler(&ws); start_server(print); }
+    
+    //getting SN an MAC, again..
+    get_SN_n_MAC(print); 
 
     //checking first if there is internet
     if(!ping(print)) deepsleep(1,print,"Deepsleep because no ping."); //handleCommands("SoftReset",NO_PING_TIME);
@@ -596,6 +614,10 @@ void setup(void) {
     read_controllers_flags(print);
 
     read_configuration(print);
+
+    get_atmos(print);
+
+    get_ports(print);
     
    
     for (int i = 0; i < 20; i++)
@@ -621,6 +643,44 @@ void loop(void) {
 // Functions
 //______________________________________________________________________
 
+#define SEALEVELPRESSURE_HPA 1015.85
+
+void get_atmos(vprint print){
+
+  float dry_bulb_temp = 0;
+  float barometric_pressure = 0;
+  float relative_humidity = 0;
+  float pressure_altitude = 0;
+
+  for (int i = 0; i < 4; i++)
+  {
+    
+    digitalWrite(ATMOS_EN, LOW );
+    delay(500);
+    digitalWrite(ATMOS_EN, HIGH );
+
+    if(!bme_static.begin(0x76)) print.logq("Could not find a valid BME280 sensor. Sensor ID is: 0x", String(int(bme_static.sensorID()),HEX) );
+    else {
+      
+      dry_bulb_temp = bme_static.readTemperature();
+      barometric_pressure = round(bme_static.readPressure()) / 1000;
+      relative_humidity = bme_static.readHumidity();
+      pressure_altitude = bme_static.readAltitude(SEALEVELPRESSURE_HPA);
+
+
+    }
+
+    delay(500);
+
+
+  
+  }
+  
+
+  
+    
+
+}
 
 String* get_firebase_json_str(vprint print){
   /*get json from firebase as ordered string*/
@@ -630,7 +690,7 @@ String* get_firebase_json_str(vprint print){
   FirebaseJson  &firebase_json = firebasedata.jsonObject();
   
   firebase_json.toString(buffer,true);
-  print.logqqq("json: \n",buffer);
+  //print.logqqq("json: \n",buffer);
    
   size_t len = firebase_json.iteratorBegin();
   String* result = new String[2*len+1];
@@ -739,7 +799,7 @@ void create_SN_nodes(vprint print) {
   json_SN_nodes.FirebaseJson::set("HARDWARE_VERSION","00");
   json_SN_nodes.FirebaseJson::set("ENVIRONMENT", "D");
   json_SN_nodes.FirebaseJson::set("DATE_CORR_AAMM", "2200");
-  json_SN_nodes.FirebaseJson::set("SN_CORR_AAMM", "9999");
+  json_SN_nodes.FirebaseJson::set("SN_CORR", "9999");
 
   String buff_string_SN_nodes;
   json_SN_nodes.toString(buff_string_SN_nodes,true);
@@ -866,13 +926,13 @@ void update_SN(vprint print){
     String fb_HARDWARE_VERSION= get_value_json_str(response, "HARDWARE_VERSION");
     String fb_ENVIRONMENT= get_value_json_str(response, "ENVIRONMENT");
     String fb_DATE_CORR_AAMM= get_value_json_str(response, "DATE_CORR_AAMM");
-    String fb_SN_CORR_AAMM= get_value_json_str(response, "SN_CORR_AAMM");
+    String fb_SN_CORR= get_value_json_str(response, "SN_CORR");
 
     if(fb_DEVICE_HEADER == "00") print.logqq("Not update because the SN in Firebase has the default value chipid");
    
     else{
 
-    String fb_SN = fb_DEVICE_HEADER + fb_HARDWARE_VERSION + fb_ENVIRONMENT + fb_DATE_CORR_AAMM + fb_SN_CORR_AAMM;
+    String fb_SN = fb_DEVICE_HEADER + fb_HARDWARE_VERSION + fb_ENVIRONMENT + fb_DATE_CORR_AAMM + fb_SN_CORR;
 
     
     if(fb_SN == SN) print.logqq("Nothing change because SN parameters in firebase is the same.") ;
@@ -1028,47 +1088,70 @@ void read_configuration(vprint print){
   DEPTH_6A = EEPROM.readInt(DEPTH_6A_eeprom);
   DEPTH_6B = EEPROM.readInt(DEPTH_6B_eeprom);
 
-  print.logqqq("ATMOS_RQ: ", ATMOS_RQ ? "true":"false" );
-  print.logqqq("BAT_H: ", String(BAT_H,3));
-  print.logqqq("BAT_L: ", String(BAT_L,3));
-  print.logqqq("BEEP_END: ", BEEP_END ? "true":"false" );
-  print.logqqq("BEEP_INIT: ", BEEP_INIT ? "true":"false");
-  print.logqqq("DAY_SLEEPTIME: ", String(DAY_SLEEPTIME));
-  print.logqqq("DAY_SLEEP_HOUR: ", String(DAY_SLEEP_HOUR));
-  print.logqqq("LATITUDE: ", String(LATITUDE,8));
-  print.logqqq("LONGITUDE: ", String(LONGITUDE,8));
-  print.logqqq("NIGHT_SLEEPTIME: ", String(NIGHT_SLEEPTIME));
-  print.logqqq("NIGHT_SLEEP_HOUR: ", String(NIGHT_SLEEP_HOUR));
-  print.logqqq("PORT_RQ: ", PORT_RQ ? "true":"false" );
-  print.logqqq("SD_ENABLE: ", SD_ENABLE ? "true":"false" );
-
-  delay(250); //because WS_MAX_QUEUED_MESSAGES in asyn TCP
-
-  print.logqqq("PORT_1_ENABLE: ", PORT_1_ENABLE ? "true":"false");
-  print.logqqq("DEPTH_1A: ", String(DEPTH_1A));
-  print.logqqq("DEPTH_1B: ", String(DEPTH_1B));
-
-  print.logqqq("PORT_2_ENABLE: ", PORT_2_ENABLE ? "true":"false");
-  print.logqqq("DEPTH_2A: ", String(DEPTH_2A));
-  print.logqqq("DEPTH_2B: ", String(DEPTH_2B));
-
-  print.logqqq("PORT_3_ENABLE: ", PORT_3_ENABLE ? "true":"false");
-  print.logqqq("DEPTH_3A: ", String(DEPTH_3A));
-  print.logqqq("DEPTH_3B: ", String(DEPTH_3B));
-
-  print.logqqq("PORT_4_ENABLE: ", PORT_4_ENABLE ? "true":"false");
-  print.logqqq("DEPTH_4A: ", String(DEPTH_4A));
-  print.logqqq("DEPTH_4B: ", String(DEPTH_4B));
-
-  print.logqqq("PORT_5_ENABLE: ", PORT_5_ENABLE ? "true":"false");
-  print.logqqq("DEPTH_5A: ", String(DEPTH_5A));
-  print.logqqq("DEPTH_5B: ", String(DEPTH_5B));
-
-  print.logqqq("PORT_6_ENABLE: ", PORT_6_ENABLE ? "true":"false");
-  print.logqqq("DEPTH_6A: ", String(DEPTH_6A));
-  print.logqqq("DEPTH_6B: ", String(DEPTH_6B));
-
-  print.logqq("Reading configurations in eeprom success:");
+  print.logqq("ATMOS_RQ: ", ATMOS_RQ ? "true":"false" );
+  delay(10);
+  print.logqq("BAT_H: ", String(BAT_H,3));
+  delay(10);
+  print.logqq("BAT_L: ", String(BAT_L,3));
+  delay(10);
+  print.logqq("BEEP_END: ", BEEP_END ? "true":"false" );
+  delay(10);
+  print.logqq("BEEP_INIT: ", BEEP_INIT ? "true":"false");
+  delay(10);
+  print.logqq("DAY_SLEEPTIME: ", String(DAY_SLEEPTIME));
+  delay(10);
+  print.logqq("DAY_SLEEP_HOUR: ", String(DAY_SLEEP_HOUR));
+  delay(10);
+  print.logqq("LATITUDE: ", String(LATITUDE,8));
+  delay(10);
+  print.logqq("LONGITUDE: ", String(LONGITUDE,8));
+  delay(10);
+  print.logqq("NIGHT_SLEEPTIME: ", String(NIGHT_SLEEPTIME));
+  delay(10);
+  print.logqq("NIGHT_SLEEP_HOUR: ", String(NIGHT_SLEEP_HOUR));
+  delay(10);
+  print.logqq("PORT_RQ: ", PORT_RQ ? "true":"false" );
+  delay(10);
+  print.logqq("SD_ENABLE: ", SD_ENABLE ? "true":"false" );
+  delay(10);//because WS_MAX_QUEUED_MESSAGES in asyn TCP
+  print.logqq("PORT_1_ENABLE: ", PORT_1_ENABLE ? "true":"false");
+  delay(10);
+  print.logqq("DEPTH_1A: ", String(DEPTH_1A));
+  delay(10);
+  print.logqq("DEPTH_1B: ", String(DEPTH_1B));
+  delay(10);
+  print.logqq("PORT_2_ENABLE: ", PORT_2_ENABLE ? "true":"false");
+  delay(10);
+  print.logqq("DEPTH_2A: ", String(DEPTH_2A));
+  delay(10);
+  print.logqq("DEPTH_2B: ", String(DEPTH_2B));
+  delay(10);
+  print.logqq("PORT_3_ENABLE: ", PORT_3_ENABLE ? "true":"false");
+  delay(10);
+  print.logqq("DEPTH_3A: ", String(DEPTH_3A));
+  delay(10);
+  print.logqq("DEPTH_3B: ", String(DEPTH_3B));
+  delay(10);
+  print.logqq("PORT_4_ENABLE: ", PORT_4_ENABLE ? "true":"false");
+  delay(10);
+  print.logqq("DEPTH_4A: ", String(DEPTH_4A));
+  delay(10);
+  print.logqq("DEPTH_4B: ", String(DEPTH_4B));
+  delay(10);
+  print.logqq("PORT_5_ENABLE: ", PORT_5_ENABLE ? "true":"false");
+  delay(10);
+  print.logqq("DEPTH_5A: ", String(DEPTH_5A));
+  delay(10);
+  print.logqq("DEPTH_5B: ", String(DEPTH_5B));
+  delay(10);
+  print.logqq("PORT_6_ENABLE: ", PORT_6_ENABLE ? "true":"false");
+  delay(10);
+  print.logqq("DEPTH_6A: ", String(DEPTH_6A));
+  delay(10);
+  print.logqq("DEPTH_6B: ", String(DEPTH_6B));
+  delay(10);
+  print.logqq("Reading configurations in eeprom success.");
+  delay(10);
 
 
 }
@@ -1473,16 +1556,33 @@ void deepsleep(int time2sleep, vprint print, String message) {
 
 void atmega_force_reset(vprint print){
 
-  print.logq("Forcing Atmega to reset.");
+  print.logqq("Forcing Atmega to reset.");
 
-  digitalWrite(ATMEGA_FORCED_RESET_PIN, HIGH);
-  delay(500);
+  pinMode(ATMEGA_FORCED_RESET_PIN, OUTPUT);
+
   digitalWrite(ATMEGA_FORCED_RESET_PIN, LOW);
-  delay(2000);
+  delay(700);
+  digitalWrite(ATMEGA_FORCED_RESET_PIN, HIGH);
+  delay(700);
+  digitalWrite(ATMEGA_FORCED_RESET_PIN, LOW);
+  delay(700); //TODO: search for a lower time
 
-  print.logqq("Reseting Atmega: Done.");
+  print.logqqq("Reseting Atmega: Done.");
 
 }
+
+void atmega_soft_reset(vprint print){
+
+  print.logqq("Atmega soft reset.");
+  digitalWrite(ARDUINO_RESTART, HIGH);
+  delay(1);
+  digitalWrite(ARDUINO_RESTART, LOW );
+  delay(10);
+  print.logqqq("Done.");
+
+}
+
+
 
 int check_WiFi(vprint print, int millis_delay){
   int WiFi_HW_Status = 0;
@@ -1519,6 +1619,7 @@ double ReadVoltage(byte pin) {
 
 bool str_to_bool(String bool_str, vprint print){
 
+
   if(bool_str == "true" || bool_str == "True" || bool_str == "TRUE") return true;
   else if (bool_str == "false" || bool_str == "False" || bool_str == "FALSE") return false;
   else {
@@ -1526,4 +1627,383 @@ bool str_to_bool(String bool_str, vprint print){
     return false;
   }
 
+}
+
+void  get_ports(vprint print) {
+  
+  char message[500];
+  memset(message,0,500);
+  int16_t port_div[50];
+  int8_t sample_div[50];
+  int16_t eos; //end of string
+  int16_t m = 0;
+  int8_t n = 0; // counter ports
+  int8_t try_counter = 0;
+
+  String response;
+
+  char recipe_aux;
+  int stop=0;
+
+  PORT_RQ = true;
+
+  if (!PORT_RQ) print.logq("No Port sensing  request.");
+  else  {
+
+    print.logq("Sensors on port requested.");
+
+    long unsigned time = millis();
+    long unsigned data_rq_elapsed_time;
+    
+    print.logq("Sending data_rq");
+    ArdSerial.print("Data_rq");
+
+    while (millis() - time < 10000)
+    { 
+      data_rq_elapsed_time = millis();
+      while(millis() - data_rq_elapsed_time < 1000) {
+        if (ArdSerial.available()) {
+          response = ArdSerial.readString();
+          print.logq("response obtained: ", response);
+          atmega_force_reset(print);
+          break;
+
+        }
+      }
+
+    }
+    
+        
+    
+ /*
+
+
+
+    print.logqq("Atmega response: ");
+
+
+    unsigned long time_sensor = millis();
+
+    while (true) {
+
+      if (ArdSerial.available()) { 
+        recipe_aux= ArdSerial.read();
+        if(recipe_aux=='$'){
+              stop=stop+1;
+              if(stop==2)break;     
+        }
+ 
+        message[m]=recipe_aux;
+        m++;
+
+      } else {
+        // TODO: we can avoid this time using a bidirectional communication ACKs an NACKs
+        if (millis() - time_sensor > 40000) {  
+          try_counter++;
+          if (try_counter >= 2) {
+            Serial.println("No sensor detected.");
+            return;
+          }
+          Serial.println("Rebooting atmega.. again");
+          time_sensor = millis();
+          digitalWrite(ARDUINO_RESTART, HIGH);
+          delay(1);
+          digitalWrite(ARDUINO_RESTART, LOW );
+          delay(10);
+          //restarting atmega to avoid overflow
+          ArdSerial.write('s');
+
+        }
+
+
+      }
+
+    }
+
+   
+    
+    String message1=getValue(message,'$',1);
+    Serial.println("-------------- Mensaje Recibido --------------");
+    Serial.println(message1);
+    port1_msg=getValue(message1,'%',1);
+    port2_msg=getValue(message1,'%',2);
+    port3_msg=getValue(message1,'%',3);
+    port4_msg=getValue(message1,'%',4);
+    
+    Serial.println("");
+    Serial.println(port1_msg);
+    Serial.println(port2_msg);
+    Serial.println(port3_msg);
+    Serial.println(port4_msg);
+
+
+
+    
+      // 01:11:12.511 -> %P1_-3235.2 20.2_-3105.5 20.2_-2969.8 20.2_k%P2_-3036.4 20.2_-3006.5 20.2_k%P3 %P4 $
+    
+      // %P1_-3235.2 20.2_-3105.5 20.2_-2969.8 20.2_k%P2_-3036.4 20.2_-3006.5 20.2_k%P3 %P4_123.123 12.213_452.34 3434_x%P41_123.123 123.32_x%P5 %P6 $
+
+      // 01:11:12.511 -> -3235.2 20.2_-3105.5 20.2_-2969.8 20.2_k
+      // 01:11:12.511 -> -3036.4 20.2_-3006.5 20.2_k
+
+    
+
+
+    Serial.println("--------------------------- PORT 1 -----------------------------");
+
+  
+    if(getValue(port1_msg,'_',1).length()>4){
+
+      port1_msg_len = port1_msg.length();
+      int8_t n_samples = 0;
+      int8_t n_var_init=0;
+      for (int i = 0; i <= port1_msg_len ; i++) {
+        if (port1_msg[i] == '_') {
+          n_samples++;
+        }
+      }
+      for (int i = 0; i <= port1_msg_len ; i++) {
+        if (port1_msg[i] == ' ') {
+          n_var_init++;
+        }
+      }
+      
+      int8_t n_var=(n_var_init/(n_samples-1))+1;
+      String P1_to_transform=getValue(port1_msg,'_',0);
+      for(int i=0; i<n_var;i++){
+        float average=0;
+         for(int j=1;j<=n_samples-1;j++){
+          average=average+getValue(getValue(port1_msg,'_',j),' ',i).toFloat();
+         }
+         average=average/(n_samples-1);
+         P1_to_transform=P1_to_transform+":"+"V"+String(i+1)+":"+String(average);
+      }
+      P1_to_transform=P1_to_transform+":"+getValue(port1_msg,'_',n_samples);
+      Serial.println(P1_to_transform);
+
+      Port1_Active = 1;
+      Serial.print("Port1_Active ");
+      Serial.println(Port1_Active);
+
+      Serial.println(getValue(port1_msg,'_',n_samples));
+      message_Json_port1=Transform_Variables(P1_to_transform,n_var,Port1_Active);
+      
+    }
+    else {
+      Port1_Active = 0;
+      Serial.print("Port1_Active ");
+      Serial.println(Port1_Active);
+    }
+    Serial.println(message_Json_port1);
+
+    //--------------------------------PORT2-----------------------------------------------
+    Serial.println("--------------------------- PORT 2 -----------------------------");
+
+   
+    if (getValue(port2_msg,'_',1).length()>4) {
+      port2_msg_len = port2_msg.length();
+      int8_t n_samples = 0;
+      int8_t n_var_init=0;
+      for (int i = 0; i <= port2_msg_len ; i++) {
+        if (port2_msg[i] == '_') {
+          n_samples++;
+        }
+      }
+      for (int i = 0; i <= port2_msg_len ; i++) {
+        if (port2_msg[i] == ' ') {
+          n_var_init++;
+        }
+      }
+      int8_t n_var=n_var_init/(n_samples-1)+1;
+      String P2_to_transform=getValue(port2_msg,'_',0);
+      for(int i=0; i<n_var;i++){
+        float average=0;
+         for(int j=1;j<=n_samples-1;j++){
+          average=average+getValue(getValue(port2_msg,'_',j),' ',i).toFloat();
+         }
+         average=average/(n_samples-1);
+         P2_to_transform=P2_to_transform+":"+"V"+String(i+1)+":"+String(average);
+      }
+      P2_to_transform=P2_to_transform+":"+getValue(port2_msg,'_',n_samples);
+      Serial.println(P2_to_transform);
+
+      Port2_Active = 1;
+      Serial.print("Port2_Active ");
+      Serial.println(Port2_Active);
+
+
+      Serial.println(getValue(port2_msg,'_',n_samples));
+      message_Json_port2=Transform_Variables(P2_to_transform,n_var,Port2_Active);
+    }
+    else {
+      Port2_Active = 0;
+      Serial.print("Port2_Active ");
+      Serial.println(Port2_Active);
+    }
+    Serial.println(message_Json_port2);
+    
+
+    //--------------------------------PORT3-----------------------------------------------
+    Serial.println("--------------------------- PORT 3 -----------------------------");
+
+   
+    if (getValue(port3_msg,'_',1).length()>4) {
+      port3_msg_len = port3_msg.length();
+      int8_t n_samples = 0;
+      int8_t n_var_init=0;
+      for (int i = 0; i <= port3_msg_len ; i++) {
+        if (port3_msg[i] == '_') {
+          n_samples++;
+        }
+      }
+      for (int i = 0; i <= port3_msg_len ; i++) {
+        if (port3_msg[i] == ' ') {
+          n_var_init++;
+        }
+      }
+      int8_t n_var=n_var_init/(n_samples-1)+1;
+      String P3_to_transform=getValue(port3_msg,'_',0);
+      for(int i=0; i<n_var;i++){
+        float average=0;
+         for(int j=1;j<=n_samples-1;j++){
+          average=average+getValue(getValue(port3_msg,'_',j),' ',i).toFloat();
+         }
+         average=average/(n_samples-1);
+         P3_to_transform=P3_to_transform+":"+"V"+String(i+1)+":"+String(average);
+      }
+      P3_to_transform=P3_to_transform+":"+getValue(port3_msg,'_',n_samples);
+      Serial.println(P3_to_transform);
+
+      Port3_Active = 1;
+      Serial.print("Port3_Active ");
+      Serial.println(Port3_Active);
+
+
+      Serial.println(getValue(port3_msg,'_',n_samples));
+      message_Json_port3=Transform_Variables(P3_to_transform,n_var,Port3_Active);
+    }
+    else {
+      Port3_Active = 0;
+      Serial.print("Port3_Active ");
+      Serial.println(Port3_Active);
+    }
+    Serial.println("-----------------------");
+    Serial.println(message_Json_port3);
+     Serial.println("-----------------------");
+    //--------------------------------PORT4-----------------------------------------------
+    Serial.println("--------------------------- PORT 4 -----------------------------");
+
+    
+    if (getValue(port4_msg,'_',1).length()>4){
+      port4_msg_len = port4_msg.length();
+      int8_t n_samples = 0;
+      int8_t n_var_init=0;
+      for (int i = 0; i <= port4_msg_len ; i++) {
+        if (port4_msg[i] == '_') {
+          n_samples++;
+        }
+      }
+      for (int i = 0; i <= port4_msg_len ; i++) {
+        if (port4_msg[i] == ' ') {
+          n_var_init++;
+        }
+      }
+      int8_t n_var=n_var_init/(n_samples-1)+1;
+      String P4_to_transform=getValue(port4_msg,'_',0);
+      for(int i=0; i<n_var;i++){
+        float average=0;
+         for(int j=1;j<=n_samples-1;j++){
+          average=average+getValue(getValue(port4_msg,'_',j),' ',i).toFloat();
+         }
+         average=average/(n_samples-1);
+         P4_to_transform=P4_to_transform+":"+"V"+String(i+1)+":"+String(average);
+      }
+      P4_to_transform=P4_to_transform+":"+getValue(port4_msg,'_',n_samples);
+      Serial.println(P4_to_transform);
+
+      Port4_Active = 1;
+      Serial.print("Port4_Active ");
+      Serial.println(Port4_Active);
+
+
+      Serial.println(getValue(port4_msg,'_',n_samples));
+      message_Json_port4=Transform_Variables(P4_to_transform,n_var,Port4_Active);
+    }
+    else {
+      Port4_Active = 0;
+      Serial.print("Port4_Active ");
+      Serial.println(Port4_Active);
+    }
+    Serial.println(message_Json_port4);
+
+    
+    //-------------------------------------------------------------------------------
+    Serial.println("--------------------------- END PORT -----------------------------");
+    moving_average_sensor();
+
+  */  
+
+  }
+ 
+}
+
+void force_hardware_reset(vprint print){
+  //reset both atmega and esp32
+
+  print.logq("Forcing hardware reset");
+
+    unsigned long task_start_time;
+    int i = 0;
+
+    //1. Reset Atmega328
+    atmega_force_reset(print);
+
+    //2. Reset ESP32
+    
+    ArdSerial.read();
+
+
+    task_start_time = millis();
+
+    while (ArdSerial.read()!= '@' && millis()-task_start_time < 2000 )
+    {
+      ArdSerial.write('e'); 
+      ++i;
+      delay(200);
+    }
+
+    //
+    print.logqq("resetting ESP32 using Atmega.");
+    delay(1000); //TODO: Explain this time
+}
+
+bool send_peripheral_command(char command , vprint print) {
+
+  
+  String str_recipe = "NACK"; // default value because we are pessimists
+  unsigned long startime = millis();
+  bool serial_response = false;
+  
+  print.logqq("Resetting, sending command and waiting for ACK.");
+  atmega_soft_reset(print);
+  
+
+  for (int i = 0; i < 3 && millis() - startime < 1000 && !serial_response; i++)
+  {
+    ArdSerial.write(command);
+    delay(150);
+    serial_response = ArdSerial.available();
+  }
+  
+  if (!serial_response) return false;
+  else str_recipe = ArdSerial.readString();
+
+  if(str_recipe == "ACK") {
+    print.logqq("ACK from peripheral received.");
+    return true;}
+          
+  else print.logqq("Error");
+  
+    
+   
 }

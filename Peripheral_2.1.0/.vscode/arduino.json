@@ -1,5 +1,5 @@
 {
     "board": "arduino:avr:uno",
-    "port": "COM6",
+    "port": "COM9",
     "sketch": "Peripheral_2.1.0.ino"
 }
