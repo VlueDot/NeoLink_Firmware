@@ -95,7 +95,7 @@ RTC_DATA_ATTR int8_t HARDWARE_AVAILABLE = 0;
 //______________________________________________________________________
 
 
-const String firmware_version = "3.0.0";
+const String firmware_version = "3.0.1";
 const char* host = "esp32";
 
 //#define BAND    433E6
@@ -653,7 +653,7 @@ void setup(void) {
 
 void loop(void) {
   if(LOCAL_SERVER) ws.cleanupClients();
-  if(MODE_PRG) handleCommands("SoftReset",60);
+  if(MODE_PRG) handleCommands("SoftReset",150);
 
 }
 
@@ -790,7 +790,7 @@ bool  send_cloud(vprint print){
   status_json.set("SolarVoltage",double(solar_voltage),2);
   status_json.set("BatteryVoltage", double(battery_voltage),3);
   status_json.set("InternalTemperature", double(internal_temperature),2);
-
+  status_json.FirebaseJson::set("LastRestart", String(restart_time_formated) );
   
   status_json.toString(buff_string,true);
   Serial.println(buff_string); 
@@ -799,7 +799,6 @@ bool  send_cloud(vprint print){
 
   print.logq("sending jsons to cloud");
         
-  //status_json.FirebaseJson::set("LastRestart", String(restart_time_formated) );
 
   Firebase.setJSON(firebasedata , "/ServicesDataset/NeoLink/" + SN + "/" + time_header , data_json );
   Firebase.setJSON(firebasedata , "/ServicesStatus/NeoLink/" + SN , status_json );
@@ -1523,10 +1522,10 @@ void starting_wifi(vprint print) {
     while (1) {
       while (WiFi.status() != WL_CONNECTED && millis() - init_timestamp < WIFI_TIME_LIMIT ) {
         Serial.print(".");
-        delay(500);
+        delay(250);
       }
       if (WiFi.status() == WL_CONNECTED) {
-        if(LOCAL_SERVER) delay(5000);
+        if(LOCAL_SERVER) delay(1000);
         print.logqq("Connected to " + String(WIFI_SSID));
         print.logqq("IP address: "+ WiFi.localIP().toString());
 
@@ -2195,7 +2194,7 @@ bool send_peripheral_command(char command , vprint print) {
   unsigned long startime = millis();
   bool serial_response = false;
   
-  print.logq("Resetting, sending command and waiting for ACK.");
+  print.logq("Resetting ATmega, sending command and waiting for ACK.");
   atmega_soft_reset(print);
   
 
