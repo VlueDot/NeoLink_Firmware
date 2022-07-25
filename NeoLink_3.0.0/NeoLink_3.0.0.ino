@@ -119,7 +119,7 @@ String HARDWARE_VERSION_FIRMWARE = "02";
 #elif FIRMWARE_MODE == 'DEV'
   #define FIREBASE_HOST "https://aidadev-71837-default-rtdb.firebaseio.com/"
   #define FIREBASE_AUTH "RbsWJ3F5EsLGLvpRefgTeyGQhEFHFp5pJfECurTE"
-  #define UPDATE_JSON_URL  "https://firebasestorage.googleapis.com/v0/b/aidadev-71837.appspot.com/o/NeoLinkFirmware%2Ffirmware_manager.json?alt=media&token="
+  #define UPDATE_JSON_URL  "https://neolink-firmware-manager.s3.amazonaws.com/"
   const char* WIFI_SSID = "MOVISTAR_9F86";
   const char* WIFI_PSSWD = "9Qt6DFyaXZUG7SPkgZzn";
   //const char* WIFI_SSID = "LINUX5"; //modem default
@@ -533,7 +533,8 @@ bool send_cloud(vprint print);
 
 void sd_saving(vprint print);
 
-bool firmware_update(int update_mode, String version, String firmware_manager_token, vprint print);
+bool firmware_update_manager(int update_mode, String version, vprint print);
+bool update_firmware(String file_name, vprint print, String certificate);
 
 //______________________________________________________________________
 //
@@ -1222,19 +1223,17 @@ print.logq("Reading Services_controller_Flags:");
 
 
 
-  Firebase.get(firebasedata, "/FirmwareTokens/NeoLink" );
-  String* response = get_firebase_json_str(print);
-  String firmware_manager_token = get_value_json_str(response, "FirmwareManager");
+  
 
   if(!local_specific_firmware_target){
     print.logqq("Firmware will target the global version.");
-    firmware_update(0, global_specific_firmware_version, firmware_manager_token, print); // Update_mode 1.
+    firmware_update_manager(0, global_specific_firmware_version, print); // Update_mode 1.
 
   }
 
   else if (local_specific_firmware_target){
     print.logqq("Firmware will target the specific version.");
-    firmware_update(1, local_specific_firmware_version, firmware_manager_token, print); // Update_mode 3.
+    firmware_update_manager(1, local_specific_firmware_version, print); // Update_mode 3.
 
   }
 
@@ -2220,7 +2219,7 @@ bool send_peripheral_command(char command , vprint print) {
    
 }
 
-bool firmware_update(int update_mode, String version, String firmware_manager_token, vprint print){
+bool firmware_update_manager(int update_mode, String version, vprint print){
 
 
 
@@ -2228,7 +2227,7 @@ bool firmware_update(int update_mode, String version, String firmware_manager_to
   
     print.logqqq("Current version: ", firmware_version);
     if(version ==  firmware_version){
-      print.logqqq("Current firmware target the global version ", version);
+      print.logqqq("Current firmware already target the global version ", version);
       return false;
     }
     else print.logqqq("Firmware will update to global version ", version);
@@ -2238,7 +2237,7 @@ bool firmware_update(int update_mode, String version, String firmware_manager_to
   else if(update_mode == 1){
 
     if(version ==  firmware_version){
-      print.logqqq("Current firmware target the local version ", version);
+      print.logqqq("Current firmware already target the local version ", version);
       return false;
     }
     else print.logqqq("Firmware will update to specific version ", version);
@@ -2254,7 +2253,7 @@ bool firmware_update(int update_mode, String version, String firmware_manager_to
   print.logqqq("Downloading firmware_manager.json");
 
   HTTPClient http;
-  http.begin(UPDATE_JSON_URL + firmware_manager_token);
+  http.begin(UPDATE_JSON_URL+ (String)"firmware_manager.json");
   int httpCode = http.GET();
 
   
@@ -2280,23 +2279,60 @@ bool firmware_update(int update_mode, String version, String firmware_manager_to
         cJSON *hw_version_json = cJSON_GetObjectItemCaseSensitive(json, HARDWARE_VERSION_FIRMWARE.c_str());
 
         if (hw_version_json == NULL) {
-          print.logqqq("There is no any FW for this HW version. Aborting...");
+          print.logqqq("There is no any FW for the HW version " + HARDWARE_VERSION_FIRMWARE + ". Aborting...");
           http.end();
           return 0;
           }
 
         cJSON *firmware_version_json = cJSON_GetObjectItemCaseSensitive(hw_version_json, version.c_str());
+
+        if (firmware_version_json == NULL) {
+          print.logqqq("There is no FW version " + version + ". Aborting...");
+          http.end();
+          return 0;
+          }
        
         cJSON *file = cJSON_GetObjectItemCaseSensitive(firmware_version_json, "file");
 
-        String file_link = file->valuestring;
+        String file_name = file->valuestring;
 
         http.end();
 
-        print.logqqq(file_link);
- 
+        print.logqqq("File name: " + file_name);
 
-        //update_firmware(file->valuestring);
+        //Firebase.get(firebasedata, "/Certificates/S3_FW");
+        //String certificate = firebasedata.stringData();
+        print.logqqq("Getting Certificate.");
+        http.begin(UPDATE_JSON_URL+ (String)"ca.cer");
+        httpCode = http.GET();
+        if (httpCode > 0) {
+          // HTTP header has been send and Server response header has been handled
+          print.logqqq("[HTTP] CODE: " + String( httpCode));
+
+          if (httpCode == HTTP_CODE_OK) {
+            print.logqqq("[HTTP] CODE OK");
+
+
+            String payload = http.getString();
+            
+            char rcv_buffer[1650];
+
+            payload.toCharArray(rcv_buffer, payload.length() + 1);
+
+            String certificate = String(rcv_buffer);
+            //print.logqqq("Getting Certificate:\n ", certificate);
+            
+            print.logqqq("Done.");
+            
+            update_firmware(file_name, print, certificate);
+
+
+            }
+        } 
+        else {
+          Serial.println("[HTTP] GET CA FAIL. ERROR: " +  http.errorToString(httpCode));
+          return 0;
+        }
 
 
       }
@@ -2307,13 +2343,32 @@ bool firmware_update(int update_mode, String version, String firmware_manager_to
   else {
     Serial.println("[HTTP] GET... failed, error: " +  http.errorToString(httpCode));
     return 0;
-    //ESP.restart();
-
 
   }
 
+}
 
 
+bool update_firmware(String file_name, vprint print, String certificate){
+  print.logq("Updating:");
+  WiFiClientSecure client;
+
+  client.setCACert(certificate.c_str());
+  t_httpUpdate_return ret = httpUpdate.update(client, UPDATE_JSON_URL + file_name);
+
+  switch (ret) {
+    case HTTP_UPDATE_FAILED:
+      Serial.printf("HTTP_UPDATE_FAILED Error (%d): %s\n", httpUpdate.getLastError(), httpUpdate.getLastErrorString().c_str());
+      break;
+
+    case HTTP_UPDATE_NO_UPDATES:
+      Serial.println("HTTP_UPDATE_NO_UPDATES");
+      break;
+
+    case HTTP_UPDATE_OK:
+      Serial.println("HTTP_UPDATE_OK");
+      break;
+  }
 
 
 }

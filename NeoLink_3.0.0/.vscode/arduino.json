@@ -2,6 +2,6 @@
     "configuration": "PSRAM=disabled,CPUFreq=240,UploadSpeed=921600,DebugLevel=none,LORAWAN_REGION=0,LoRaWanDebugLevel=0",
     "board": "Heltec-esp32:esp32:wifi_lora_32_V2",
     "sketch": "NeoLink_3.0.0.ino",
-    "port": "COM4",
+    "port": "COM5",
     "output": "../output"
 }
