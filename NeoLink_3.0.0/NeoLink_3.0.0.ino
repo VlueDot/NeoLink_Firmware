@@ -49,7 +49,8 @@
 #include <Arduino_JSON.h>
 #include <HTTPClient.h>
 
-
+#include <stdlib.h>
+#include <Time.h>
 
 //______________________________________________________________________
 //
@@ -103,7 +104,7 @@ const char* host = "esp32";
 
 char SN_HEADER [20];
 String DEVICE_HEADER_FIRMWARE = "NL";
-String HARDWARE_VERSION_FIRMWARE = "03";
+String HARDWARE_VERSION_FIRMWARE = "02";
 
 
 #if FIRMWARE_MODE == 'PRO'
@@ -118,7 +119,7 @@ String HARDWARE_VERSION_FIRMWARE = "03";
 #elif FIRMWARE_MODE == 'DEV'
   #define FIREBASE_HOST "https://aidadev-71837-default-rtdb.firebaseio.com/"
   #define FIREBASE_AUTH "RbsWJ3F5EsLGLvpRefgTeyGQhEFHFp5pJfECurTE"
-  #define UPDATE_JSON_URL  "https://firmware-neolink.s3-sa-east-1.amazonaws.com/firmware_pro.json"
+  #define UPDATE_JSON_URL  "https://firebasestorage.googleapis.com/v0/b/aidadev-71837.appspot.com/o/NeoLinkFirmware%2Ffirmware_manager.json?alt=media&token="
   const char* WIFI_SSID = "MOVISTAR_9F86";
   const char* WIFI_PSSWD = "9Qt6DFyaXZUG7SPkgZzn";
   //const char* WIFI_SSID = "LINUX5"; //modem default
@@ -273,6 +274,7 @@ RTC_DATA_ATTR int8_t Start_or_Restart = 1;
 
 RTC_DATA_ATTR float battery_voltage = -10;
 RTC_DATA_ATTR float solar_voltage = -10;
+RTC_DATA_ATTR float internal_temperature = -100;
 RTC_DATA_ATTR int8_t battery_available = 1; 
 RTC_DATA_ATTR int update_sn_flag = 0 ;
 
@@ -280,6 +282,9 @@ RTC_DATA_ATTR float dry_bulb_temp = -100;
 RTC_DATA_ATTR float barometric_pressure = -100;
 RTC_DATA_ATTR float relative_humidity = -100;
 RTC_DATA_ATTR float pressure_altitude = -100;
+
+RTC_DATA_ATTR int last_restart_timestamp;
+
 
 
 //______________________________________________________________________
@@ -504,16 +509,16 @@ void starting_wifi(vprint print);
 void check_configuration(vprint print);
 void write_eeprom(String string_to_eeprom, int position, vprint print);
 String read_eeprom(int init, int len);
-void get_SN_n_MAC(vprint print);
+bool get_SN_n_MAC(vprint print);
 bool ping(vprint print);
 void print_controller_status(vprint print);
 void create_SN_nodes(vprint print);
 void create_nodes(vprint print) ;
 String* get_firebase_json_str(vprint print);
 void deepsleep(int time2sleep, vprint print, String message);
-void update_SN(vprint print);
+void update_SN(vprint print, bool compatible_fw_flag);
 bool str_to_bool(String bool_str, vprint print);
-void get_firebase_configuration(vprint print);
+void get_firebase_configuration(vprint print); 
 
 void  get_ports(vprint print);
 
@@ -525,6 +530,10 @@ bool send_peripheral_command(char command , vprint print);
 void get_atmos(vprint print);
 
 bool send_cloud(vprint print);
+
+void sd_saving(vprint print);
+
+bool firmware_update(int update_mode, String version, String firmware_manager_token, vprint print);
 
 //______________________________________________________________________
 //
@@ -541,7 +550,7 @@ void setup(void) {
   digitalWrite(BAT_SOLAR_EN, LOW);
 
   pinMode(TEMP_EN, OUTPUT);
-  digitalWrite(TEMP_EN, LOW);
+  digitalWrite(TEMP_EN, HIGH);
 
   pinMode(ATMOS_EN, OUTPUT);
   digitalWrite(ATMOS_EN, HIGH);
@@ -565,14 +574,13 @@ void setup(void) {
   
   //Stage =1;
   if (Stage == 1) {
+    //beep.vbeep(250);
     Serial.println();
-    Serial.println("___________________________________________________");
+    Serial.println("__________________________________________________________");
     print.logq("Greenbird AG - AIDA | NeoLink Firmware Version: ", firmware_version);
 
     //physical forced reset Atmega328pu. Prevention
     atmega_force_reset(print);
-
-    if (Start_or_Restart) beep.vbeep(250);
 
     get_SN_n_MAC(print);
     
@@ -597,7 +605,7 @@ void setup(void) {
   }
 
   else if (Stage == 2) {
-    Serial.println("___________________________________________________");
+    Serial.println("__________________________________________________________");
     print.logq("[STAGE 2]: ");
 
     //activate sensors read
@@ -609,16 +617,18 @@ void setup(void) {
     
     // Enabling local server if is required
     if(LOCAL_SERVER){ws.onEvent(onEvent); server.addHandler(&ws); start_server(print); }
-    
-    //getting SN an MAC, again..
-    get_SN_n_MAC(print); 
 
     //checking first if there is internet
     if(!ping(print)) deepsleep(1,print,"Deepsleep because no ping."); //handleCommands("SoftReset",NO_PING_TIME);
 
-    update_SN(print);
+    checking_battery(print);
+    
+    //getting SN an MAC, again..
+    bool compatible_fw_flag = get_SN_n_MAC(print); 
 
-    read_controllers_flags(print);
+    update_SN(print , compatible_fw_flag);
+
+    read_controllers_flags(print); // read update flags and OTA update. 
 
     read_configuration(print);
 
@@ -626,23 +636,23 @@ void setup(void) {
 
     get_ports(print);
 
+    sd_saving(print);
+
     send_cloud(print);
-    
-   
-    for (int i = 0; i < 20; i++)
-    {
-      print.logq(i);
-      delay(1000);
-    }
+
     
     Stage = 1;
+
+
+    delay(500);
+
 }
 
 }
 
 void loop(void) {
   if(LOCAL_SERVER) ws.cleanupClients();
-  if(MODE_PRG) handleCommands("SoftReset");
+  if(MODE_PRG) handleCommands("SoftReset",60);
 
 }
 
@@ -652,18 +662,162 @@ void loop(void) {
 // Functions
 //______________________________________________________________________
 
-bool send_cloud(vprint print){
 
-  print.logq("Start send_cloud function.");
+void sd_saving(vprint print){
+  print.logq("No Sd routine defined.");
 
-  print.logqq("making json");
+}
 
-  print.logqq("sending json to cloud");
+bool  send_cloud(vprint print){
 
-  return true;
+ 
+  
+  neoFirebaseJson data_json;
+  neoFirebaseJson status_json;
+
+  print.logq("Getting timestamp:");
+
+  configTime(gmtOffset_sec, daylightOffset_sec, "0.pool.ntp.org", "1.pool.ntp.org", "time.nist.gov");
+  struct tm timeinfo;
+  int time_attemps = 0;
+  
+
+  do
+  {
+    getLocalTime(&timeinfo);
+    time_attemps ++;
+    print.logqq("Attemps: ", time_attemps);
+    if (time_attemps > 3) deepsleep(1, print);
+    delay(200);
+
+  } while (timeinfo.tm_year - 100 < 0);
+
+
+  char time_formated[40];
+  strftime(time_formated, 40, "%m-%d-%Y %H:%M:%S", &timeinfo); 
+  print.logqq("Current Time: " + String(time_formated));
+
+
+
+  if (Start_or_Restart) {
+    last_restart_timestamp = int(mktime(&timeinfo));
+    Start_or_Restart = 0;  
+    
+  }
+
+  
+  tm last_restart_tm;
+  time_t last_restart_time = last_restart_timestamp;
+  localtime_r(&last_restart_time, &last_restart_tm);
+  char restart_time_formated[40];
+  strftime(restart_time_formated, 40, "%m-%d-%Y %H:%M:%S", &last_restart_tm); 
+  print.logqq("Restart_time_formated: " + String(restart_time_formated));
+
+  
+
+  int _year = timeinfo.tm_year + 1900;
+  int8_t _mon = timeinfo.tm_mon;
+  int8_t _day = timeinfo.tm_mday;
+  int8_t _hour = timeinfo.tm_hour;
+  int8_t _min = timeinfo.tm_min;
+  int8_t _secs = timeinfo.tm_sec;
+
+  /*print.logq(timeinfo.tm_year);
+  print.logq(_mon);
+  print.logq(_day);
+  print.logq(_hour);
+  print.logq(_min);
+  print.logq(_secs);*/
+
+
+  _min = _min -_min % 5;
+
+  
+  //print.logq(_min);
+  struct tm roundtime_timestamp = timeinfo;   //timestamp
+  roundtime_timestamp.tm_min = _min ;
+  roundtime_timestamp.tm_sec = 0 ;
+
+  char roundtime_formated[40];
+  strftime(roundtime_formated, 40, "%m-%d-%Y %H:%M", &roundtime_timestamp); 
+ 
+  int roundtime_timestamp_int = int(mktime(&roundtime_timestamp));
+  print.logqq("round timestamp: ", roundtime_timestamp_int);
+  print.logqq(String(roundtime_formated));
+
+  
+
+
+
+  if(ping(print)){
+    print.logq("Making json");
+
+  
+    //time header
+
+    String time_header = String(_year) + "/" + String(roundtime_formated)+ "/" ;
+
+    //atmospheric
+    data_json.set("Atmospheric/DryTemperature", double(dry_bulb_temp),2);
+    data_json.set("Atmospheric/RelativeHumidity", double(relative_humidity),2);
+    data_json.set("Atmospheric/BarometricPressure", double(barometric_pressure)/1000.00,2);
+    data_json.set("Atmospheric/PressureAltitude", double(pressure_altitude),1);
+
+    //NeoLinkState
+
+    data_json.set("NeoLinkState/SolarVoltage",double(solar_voltage),2);
+    data_json.set("NeoLinkState/BatteryVoltage", double(battery_voltage),3);
+    data_json.set("NeoLinkState/InternalTemperature", double(internal_temperature),2);
+
+    //timestamp
+
+    data_json.FirebaseJson::set("RoundTs", roundtime_timestamp_int);
+    data_json.FirebaseJson::set("RealTs/.sv", "timestamp");
+
+    
+    
+    String buff_string;
+    data_json.toString(buff_string,true);
+    Serial.println(buff_string); 
+    
+    
+    //ServicesStatus
+
+  
+  status_json.FirebaseJson::set("LastUpdate", String(roundtime_formated) );
+  status_json.FirebaseJson::set("FirmwareVersion", firmware_version);
+  status_json.set("SolarVoltage",double(solar_voltage),2);
+  status_json.set("BatteryVoltage", double(battery_voltage),3);
+  status_json.set("InternalTemperature", double(internal_temperature),2);
+
+  
+  status_json.toString(buff_string,true);
+  Serial.println(buff_string); 
+
+  print.logqq("Done.");
+
+  print.logq("sending jsons to cloud");
+        
+  //status_json.FirebaseJson::set("LastRestart", String(restart_time_formated) );
+
+  Firebase.setJSON(firebasedata , "/ServicesDataset/NeoLink/" + SN + "/" + time_header , data_json );
+  Firebase.setJSON(firebasedata , "/ServicesStatus/NeoLink/" + SN , status_json );
+
+  print.logqq("Done.");
+    
+   return true;
+
+  }
+
+  else print.logqq("send to cloud failed.");
+
+  return false;
+  
 
 
 }
+
+
 
 #define SEALEVELPRESSURE_HPA 1015.85
 
@@ -673,13 +827,26 @@ void get_atmos(vprint print){
 
   long unsigned timestamp = millis();
   bool bme_status = bme_static.begin(0x76);
-  if(!bme_status) {
-    
-      print.logqq("Atmos failed. Sensor ID is: 0x", String(int(bme_static.sensorID()),HEX) );
-      
-    }
+  if(!bme_status) print.logqq("Atmos failed. Sensor ID is: 0x", String(int(bme_static.sensorID()),HEX) );
   
-  while(bme_static.readPressure()<5000 && millis() - timestamp < 15000) delay(200);  
+  while(bme_static.readPressure()<5000 && millis() - timestamp < 15000) delay(200); 
+
+  if ( isnan(bme_static.readHumidity())) {
+    print.logqqq("NaN detected"); 
+    digitalWrite(TEMP_EN, LOW);
+    delay(1000);
+    digitalWrite(TEMP_EN, HIGH);
+    delay(1000);
+    bme_status = bme_static.begin(0x76);
+    if(!bme_status) print.logqq("Atmos failed. Sensor ID is: 0x", String(int(bme_static.sensorID()),HEX) );
+    while(bme_static.readPressure()<5000 && millis() - timestamp < 15000) delay(200); 
+  } 
+
+  if(isnan(bme_static.readHumidity())) { 
+    print.logqq("ERROR Atmos NaN"); 
+    digitalWrite(TEMP_EN, LOW); 
+    delay(500);
+    deepsleep(1,print);}
 
   if(dry_bulb_temp == -100 || barometric_pressure == -100 || relative_humidity == -100 || pressure_altitude == -100  )
       { 
@@ -694,17 +861,18 @@ void get_atmos(vprint print){
     relative_humidity = (bme_static.readHumidity() + relative_humidity)/2;
     pressure_altitude = (bme_static.readAltitude(SEALEVELPRESSURE_HPA) + pressure_altitude)/2;}
 
-      print.logqq("dry_bulb_temp: ", String(dry_bulb_temp,3));
-      print.logqq("barometric_pressure: ", String(barometric_pressure/1000.00,3));
-      print.logqq("relative_humidity: ", String(relative_humidity,3));
-      print.logqq("pressure_altitude: ", String(pressure_altitude,3));
+  print.logqq("dry_bulb_temp: ", String(dry_bulb_temp,3));
+  print.logqq("barometric_pressure: ", String(barometric_pressure/1000.000,3));
+  print.logqq("relative_humidity: ", String(relative_humidity,3));
+  print.logqq("pressure_altitude: ", String(pressure_altitude,1));
 
-      return;
+  digitalWrite(TEMP_EN, LOW);
+  
+  return;
       
       
 }
  
-
 String* get_firebase_json_str(vprint print){
   /*get json from firebase as ordered string*/
   
@@ -750,7 +918,10 @@ String get_value_json_str(String* response, String variable_required){
 
 }
 
-void get_SN_n_MAC(vprint print){
+bool get_SN_n_MAC(vprint print){
+//return true if SN is compatible; otherwise False
+
+bool compatible_flag;
 
   print.logq("Reading SN and MAC:");
 
@@ -764,7 +935,10 @@ void get_SN_n_MAC(vprint print){
   Serial.println(HARDWARE_VERSION);
   Serial.println(ENVIRONMENT);
   Serial.println(DATE_CORRELATIVE);
-  Serial.println(SN_CORRELATIVE);*/
+  Serial.println(SN_CORRELATIVE);
+   
+  Serial.println(DEVICE_HEADER_FIRMWARE);
+  Serial.println(HARDWARE_VERSION_FIRMWARE);*/
 
   SN = DEVICE_HEADER+HARDWARE_VERSION+ENVIRONMENT+DATE_CORRELATIVE+SN_CORRELATIVE;
 
@@ -774,15 +948,22 @@ void get_SN_n_MAC(vprint print){
 
     print.logqq("Firmware compatible with this device version.");
     print.logqq("SN: ", SN);
+    compatible_flag = true;
+
     
     }
-  else print.logqq("SN not for this firmware. Updating SN in a while. SN: ", SN );
+  else {
+    print.logqq("SN not for this firmware. Updating SN in a while. SN: ", SN );
+    compatible_flag = false;
+  }
 
   uint64_t chipid;
   chipid = ESP.getEfuseMac(); //The chip ID is its MAC address(length: 6 bytes).
   chipid_str = String((uint16_t)(chipid >> 32), HEX) + String((uint32_t)chipid, HEX);
 
   print.logqq("Chip ID: ", chipid_str);
+
+  return compatible_flag;
 
 
 } 
@@ -844,8 +1025,8 @@ void create_nodes(vprint print) {
   //19.06 15:19 is absurd. I decided to create the default nodes in every case if SN changes.
   print.logq("Creating nodes with default values for " + SN);
 
-  json_node_controllers_flag.FirebaseJson::set("local_last_firmware_update", false);
-  json_node_controllers_flag.FirebaseJson::set("local_specific_firmware_update", false); 
+  
+  json_node_controllers_flag.FirebaseJson::set("local_specific_firmware_target", false); 
   json_node_controllers_flag.FirebaseJson::set("local_specific_firmware_version", firmware_version);
 
   json_node_controllers_flag.FirebaseJson::set("update_config_flag", true); 
@@ -906,7 +1087,7 @@ void create_nodes(vprint print) {
 
 }
 
-void update_SN(vprint print){
+void update_SN(vprint print , bool compatible_fw_flag){
 
   print.logq("Checking for SN json updates.");
 
@@ -989,8 +1170,8 @@ void read_controllers_flags(vprint print){
 
 print.logq("Reading Services_controller_Flags:");
 
-  bool global_last_firmware_update  = false;
-  bool global_specific_firmware_update = false;
+  
+  
   String global_specific_firmware_version;
   const String Global_update_path = "/Services_controllers_Flags/Global/NeoLink";
   bool global_json_obtained = Firebase.get(firebasedata, Global_update_path);
@@ -1003,16 +1184,14 @@ print.logq("Reading Services_controller_Flags:");
     
     String* response = get_firebase_json_str(print);
 
-    global_last_firmware_update = str_to_bool(get_value_json_str(response, "global_last_firmware_update"),print);
-    global_specific_firmware_update = str_to_bool(get_value_json_str(response, "global_specific_firmware_update"), print);
     global_specific_firmware_version = get_value_json_str(response, "global_specific_firmware_version");
 
     print.logqqq("Done.");
    
   } else print.logqq("Unsuccessful.");
 
-  bool local_last_firmware_update  = false;
-  bool local_specific_firmware_update = false;
+
+  bool local_specific_firmware_target = false;
   String local_specific_firmware_version;
   String Local_update_path = "/Services_controllers_Flags/NeoLink/" + SN;
   bool local_json_obtained = Firebase.get(firebasedata, Local_update_path);
@@ -1025,8 +1204,7 @@ print.logq("Reading Services_controller_Flags:");
     
     String* response = get_firebase_json_str(print);
     
-    local_last_firmware_update = str_to_bool( get_value_json_str(response, "local_last_firmware_update"), print);
-    local_specific_firmware_update = str_to_bool( get_value_json_str(response, "local_specific_firmware_update"), print);
+    local_specific_firmware_target = str_to_bool( get_value_json_str(response, "local_specific_firmware_target"), print);
     local_specific_firmware_version = get_value_json_str(response, "local_specific_firmware_version");
     update_config_flag = str_to_bool(get_value_json_str(response, "update_config_flag"), print);
 
@@ -1034,37 +1212,36 @@ print.logq("Reading Services_controller_Flags:");
    
   } else print.logqqq("Unsuccessful.");
 
-  
-    if(global_specific_firmware_update && !global_specific_firmware_update && !local_last_firmware_update && !local_specific_firmware_update) {
-      print.logqq("Firmware will update to the last version via global update.");
-      
+  print.logqq("update_config_flag is " + update_config_flag? "True":"False");
 
-    }
-
-    else if(global_specific_firmware_update && !local_last_firmware_update && !local_specific_firmware_update){
-      print.logqq("Firmware will update via global specific update to the version " + global_specific_firmware_version + ".");
-      
-
-    }
-
-    else if(local_last_firmware_update && !local_specific_firmware_update){
-      print.logqq("Firmware will update to the last version via local update");
-
-    }
-
-    else if (local_specific_firmware_update){
-      print.logqq("Firmware will update via specific update to the version " + local_specific_firmware_version);
-
-    }
-
-    else print.logqq("No update will perform.");
-
-    
-    if(update_config_flag){
+  if(update_config_flag){
       print.logqq("Reading and Saving in eeprom new configuration from Services_config.");
       get_firebase_configuration(print);
       
     } else print.logqq("No configuration updating will performed.");
+
+
+
+  Firebase.get(firebasedata, "/FirmwareTokens/NeoLink" );
+  String* response = get_firebase_json_str(print);
+  String firmware_manager_token = get_value_json_str(response, "FirmwareManager");
+
+  if(!local_specific_firmware_target){
+    print.logqq("Firmware will target the global version.");
+    firmware_update(0, global_specific_firmware_version, firmware_manager_token, print); // Update_mode 1.
+
+  }
+
+  else if (local_specific_firmware_target){
+    print.logqq("Firmware will target the specific version.");
+    firmware_update(1, local_specific_firmware_version, firmware_manager_token, print); // Update_mode 3.
+
+  }
+
+  else print.logqq("No update will perform.");
+
+  
+  
 
 
 }
@@ -1111,71 +1288,72 @@ void read_configuration(vprint print){
   DEPTH_6A = EEPROM.readInt(DEPTH_6A_eeprom);
   DEPTH_6B = EEPROM.readInt(DEPTH_6B_eeprom);
 
+  /*
   print.logqq("ATMOS_RQ: ", ATMOS_RQ ? "true":"false" );
-  delay(10);
+  delay(20);
   print.logqq("BAT_H: ", String(BAT_H,3));
-  delay(10);
+  delay(20);
   print.logqq("BAT_L: ", String(BAT_L,3));
-  delay(10);
+  delay(20);
   print.logqq("BEEP_END: ", BEEP_END ? "true":"false" );
-  delay(10);
+  delay(20);
   print.logqq("BEEP_INIT: ", BEEP_INIT ? "true":"false");
-  delay(10);
+  delay(20);
   print.logqq("DAY_SLEEPTIME: ", String(DAY_SLEEPTIME));
-  delay(10);
+  delay(20);
   print.logqq("DAY_SLEEP_HOUR: ", String(DAY_SLEEP_HOUR));
-  delay(10);
+  delay(20);
   print.logqq("LATITUDE: ", String(LATITUDE,8));
-  delay(10);
+  delay(20);
   print.logqq("LONGITUDE: ", String(LONGITUDE,8));
-  delay(10);
+  delay(20);
   print.logqq("NIGHT_SLEEPTIME: ", String(NIGHT_SLEEPTIME));
-  delay(10);
+  delay(20);
   print.logqq("NIGHT_SLEEP_HOUR: ", String(NIGHT_SLEEP_HOUR));
-  delay(10);
+  delay(20);
   print.logqq("PORT_RQ: ", PORT_RQ ? "true":"false" );
-  delay(10);
+  delay(20);
   print.logqq("SD_ENABLE: ", SD_ENABLE ? "true":"false" );
-  delay(10);//because WS_MAX_QUEUED_MESSAGES in asyn TCP
+  delay(20);//because WS_MAX_QUEUED_MESSAGES in asyn TCP
   print.logqq("PORT_1_ENABLE: ", PORT_1_ENABLE ? "true":"false");
-  delay(10);
+  delay(20);
   print.logqq("DEPTH_1A: ", String(DEPTH_1A));
-  delay(10);
+  delay(20);
   print.logqq("DEPTH_1B: ", String(DEPTH_1B));
-  delay(10);
+  delay(20);
   print.logqq("PORT_2_ENABLE: ", PORT_2_ENABLE ? "true":"false");
-  delay(10);
+  delay(20);
   print.logqq("DEPTH_2A: ", String(DEPTH_2A));
-  delay(10);
+  delay(20);
   print.logqq("DEPTH_2B: ", String(DEPTH_2B));
-  delay(10);
+  delay(20);
   print.logqq("PORT_3_ENABLE: ", PORT_3_ENABLE ? "true":"false");
-  delay(10);
+  delay(20);
   print.logqq("DEPTH_3A: ", String(DEPTH_3A));
-  delay(10);
+  delay(20);
   print.logqq("DEPTH_3B: ", String(DEPTH_3B));
-  delay(10);
+  delay(20);
   print.logqq("PORT_4_ENABLE: ", PORT_4_ENABLE ? "true":"false");
-  delay(10);
+  delay(20);
   print.logqq("DEPTH_4A: ", String(DEPTH_4A));
-  delay(10);
+  delay(20);
   print.logqq("DEPTH_4B: ", String(DEPTH_4B));
-  delay(10);
+  delay(20);
   print.logqq("PORT_5_ENABLE: ", PORT_5_ENABLE ? "true":"false");
-  delay(10);
+  delay(20);
   print.logqq("DEPTH_5A: ", String(DEPTH_5A));
-  delay(10);
+  delay(20);
   print.logqq("DEPTH_5B: ", String(DEPTH_5B));
-  delay(10);
+  delay(20);
   print.logqq("PORT_6_ENABLE: ", PORT_6_ENABLE ? "true":"false");
-  delay(10);
+  delay(20);
   print.logqq("DEPTH_6A: ", String(DEPTH_6A));
-  delay(10);
+  delay(20);
   print.logqq("DEPTH_6B: ", String(DEPTH_6B));
-  delay(10);
-  print.logqq("Reading configurations in eeprom success.");
-  delay(10);
-
+  delay(20);
+  
+  delay(20);*/
+  print.logqq("Success.");
 
 }
 
@@ -1349,7 +1527,7 @@ void starting_wifi(vprint print) {
         delay(500);
       }
       if (WiFi.status() == WL_CONNECTED) {
-        if(LOCAL_SERVER) delay(8000);
+        if(LOCAL_SERVER) delay(5000);
         print.logqq("Connected to " + String(WIFI_SSID));
         print.logqq("IP address: "+ WiFi.localIP().toString());
 
@@ -1520,22 +1698,33 @@ int checking_battery(vprint print) {
   pinMode(BAT_VALUE, INPUT_PULLDOWN);
   pinMode(SOLAR_VALUE, INPUT_PULLDOWN);
 
+  sensors.begin();
+
   digitalWrite(BAT_SOLAR_EN, HIGH);
   delay(20);
 
   float solar_voltage_temp;
   float battery_voltage_temp;
+  float internal_temperature_temp;
 
   solar_voltage_temp  = ReadVoltage(SOLAR_VALUE) ;
   battery_voltage_temp = ReadVoltage(BAT_VALUE) ;
+
+  sensors.requestTemperatures(); 
+  internal_temperature_temp = sensors.getTempCByIndex(0);
 
   digitalWrite(BAT_SOLAR_EN, LOW);
 
   if (battery_voltage <= 0 )battery_voltage = battery_voltage_temp;
   if ( solar_voltage <= 0) solar_voltage = solar_voltage_temp ;
+  if ( internal_temperature <= 0) internal_temperature = internal_temperature_temp ;
     
   battery_voltage = (battery_voltage_temp + battery_voltage ) / 2 ;
   solar_voltage = (solar_voltage_temp + solar_voltage) / 2;
+  internal_temperature = (internal_temperature_temp + internal_temperature) / 2;
+
+  
+  print.logqq("Internal temperature: ", internal_temperature);
 
   solar_voltage   = solar_voltage * 0.003692945;
   print.logqq("Solar voltage: ", solar_voltage);
@@ -1596,12 +1785,12 @@ void atmega_force_reset(vprint print){
 
 void atmega_soft_reset(vprint print){
 
-  print.logqq("Atmega soft reset.");
+  print.logq("Atmega soft reset.");
   digitalWrite(ARDUINO_RESTART, HIGH);
   delay(1);
   digitalWrite(ARDUINO_RESTART, LOW );
   delay(10);
-  print.logqqq("Done.");
+  print.logqq("Done.");
 
 }
 
@@ -2007,7 +2196,7 @@ bool send_peripheral_command(char command , vprint print) {
   unsigned long startime = millis();
   bool serial_response = false;
   
-  print.logqq("Resetting, sending command and waiting for ACK.");
+  print.logq("Resetting, sending command and waiting for ACK.");
   atmega_soft_reset(print);
   
 
@@ -2029,4 +2218,102 @@ bool send_peripheral_command(char command , vprint print) {
   
     
    
+}
+
+bool firmware_update(int update_mode, String version, String firmware_manager_token, vprint print){
+
+
+
+  if(update_mode == 0){
+  
+    print.logqqq("Current version: ", firmware_version);
+    if(version ==  firmware_version){
+      print.logqqq("Current firmware target the global version ", version);
+      return false;
+    }
+    else print.logqqq("Firmware will update to global version ", version);
+   
+  }
+
+  else if(update_mode == 1){
+
+    if(version ==  firmware_version){
+      print.logqqq("Current firmware target the local version ", version);
+      return false;
+    }
+    else print.logqqq("Firmware will update to specific version ", version);
+
+  }
+
+  else {
+    print.logqqq("[ERROR] Unexpected update_mode."); 
+    return false;
+    }
+
+  
+  print.logqqq("Downloading firmware_manager.json");
+
+  HTTPClient http;
+  http.begin(UPDATE_JSON_URL + firmware_manager_token);
+  int httpCode = http.GET();
+
+  
+  if (httpCode > 0) {
+    // HTTP header has been send and Server response header has been handled
+      print.logqqq("[HTTP] CODE: " + String( httpCode));
+
+    if (httpCode == HTTP_CODE_OK) {
+      print.logqqq("[HTTP] CODE OK");
+
+
+      String payload = http.getString();
+      
+      char rcv_buffer[300];
+
+      payload.toCharArray(rcv_buffer, payload.length() + 1);
+
+      cJSON *json = cJSON_Parse(rcv_buffer);
+      if (json == NULL)  print.logqqq("downloaded file is not a valid json, aborting...");
+      else {
+         print.logqqq("[HTTP] JSON OK");
+
+        cJSON *hw_version_json = cJSON_GetObjectItemCaseSensitive(json, HARDWARE_VERSION_FIRMWARE.c_str());
+
+        if (hw_version_json == NULL) {
+          print.logqqq("There is no any FW for this HW version. Aborting...");
+          http.end();
+          return 0;
+          }
+
+        cJSON *firmware_version_json = cJSON_GetObjectItemCaseSensitive(hw_version_json, version.c_str());
+       
+        cJSON *file = cJSON_GetObjectItemCaseSensitive(firmware_version_json, "file");
+
+        String file_link = file->valuestring;
+
+        http.end();
+
+        print.logqqq(file_link);
+ 
+
+        //update_firmware(file->valuestring);
+
+
+      }
+
+    }
+
+  }
+  else {
+    Serial.println("[HTTP] GET... failed, error: " +  http.errorToString(httpCode));
+    return 0;
+    //ESP.restart();
+
+
+  }
+
+
+
+
+
 }
