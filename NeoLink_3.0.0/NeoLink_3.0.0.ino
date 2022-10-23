@@ -95,7 +95,7 @@ RTC_DATA_ATTR int8_t HARDWARE_AVAILABLE = 0;
 //______________________________________________________________________
 
 
-const String firmware_version = "3.0.1";
+const String firmware_version = "3.0.0";
 const char* host = "esp32";
 
 //#define BAND    433E6
@@ -120,10 +120,10 @@ String HARDWARE_VERSION_FIRMWARE = "02";
   #define FIREBASE_HOST "https://aidadev-71837-default-rtdb.firebaseio.com/"
   #define FIREBASE_AUTH "RbsWJ3F5EsLGLvpRefgTeyGQhEFHFp5pJfECurTE"
   #define UPDATE_JSON_URL  "https://neolink-firmware-manager.s3.amazonaws.com/"
-  const char* WIFI_SSID = "MOVISTAR_9F86";
-  const char* WIFI_PSSWD = "9Qt6DFyaXZUG7SPkgZzn";
-  //const char* WIFI_SSID = "LINUX5"; //modem default
-  //const char* WIFI_PSSWD = "1a23456789abc";
+  //const char* WIFI_SSID = "MOVISTAR_9F86";
+  //const char* WIFI_PSSWD = "9Qt6DFyaXZUG7SPkgZzn";
+  const char* WIFI_SSID = "LINUX5"; //modem default
+  const char* WIFI_PSSWD = "1a23456789abc";
   
 
 #endif
